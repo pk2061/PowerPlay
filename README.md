@@ -1,5 +1,7 @@
 # PowerPlay
 
+> This project was vibecoded with the help of Copilot.
+
 [![Platform](https://img.shields.io/badge/platform-macOS%2010.4%20Tiger-8a8a8a?logo=apple)](https://github.com/pk2061/PowerPlay)
 [![Language](https://img.shields.io/badge/language-Objective%E2%80%93C-6E4C13)](https://github.com/pk2061/PowerPlay)
 [![Status](https://img.shields.io/badge/status-Experimental-orange)](https://github.com/pk2061/PowerPlay)
