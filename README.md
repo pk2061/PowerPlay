@@ -1,126 +1,82 @@
 # PowerPlay
 
-PowerPlay is a Tiger-era AirPlay receiver skeleton intended to run on both PowerPC and Intel Macs. It is designed as a realistic protocol-oriented foundation for a classic AirPlay audio receiver rather than a finished turnkey application.
+[![Platform](https://img.shields.io/badge/platform-macOS%2010.4%20Tiger-8a8a8a?logo=apple)](https://github.com/pk2061/PowerPlay)
+[![Language](https://img.shields.io/badge/language-Objective%E2%80%93C-6E4C13)](https://github.com/pk2061/PowerPlay)
+[![Status](https://img.shields.io/badge/status-Experimental-orange)](https://github.com/pk2061/PowerPlay)
 
-## Important caveat
+PowerPlay is a classic Cocoa/Objective-C AirPlay receiver prototype built around the constraints of Mac OS X 10.4 Tiger. The goal is to explore a realistic legacy receiver architecture that can discover AirPlay sources, negotiate RTSP control, handle RTP audio transport, parse metadata, and output audio through CoreAudio.
 
-- Mac OS X 10.4 Tiger does not expose a public AirPlay receiver API.
-- A real implementation must use the RAOP/AirTunes protocol stack: Bonjour discovery, RTSP control, RTP audio, AES session setup, and CoreAudio playback.
-- This repository therefore provides a practical app shell and protocol skeleton rather than a drop-in product.
+This project is intentionally a protocol-oriented foundation and research scaffold rather than a turnkey streaming product. It aims to stay faithful to Tiger-era runtime and ABI constraints while modeling the key protocol boundaries required for real AirPlay compatibility.
 
-## Current project layout
+## Why this project exists
 
-The source code is organized into logical folders:
+- Mac OS X Tiger does not ship with a public AirPlay receiver API.
+- A real implementation needs the RAOP/AirTunes protocol stack: Bonjour discovery, RTSP negotiation, RTP audio, session setup, metadata parsing, and audio playback.
+- This repository documents and implements the architecture in a way that is easier to reason about, extend, and validate on legacy systems.
 
-- App/ — application delegate, main entry point, and Growl integration
-- Audio/ — ALAC decoder and CoreAudio output layer
+## Current status
+
+PowerPlay is in an experimental state. The repository includes:
+
+- a Cocoa app shell for a legacy Mac app
+- AirPlay discovery and control flow scaffolding
+- RTP and metadata parsing boundaries
+- ALAC decoder and CoreAudio playback stubs
+- cover-art and track metadata handling
+- Growl notifications for track changes
+
+The code is designed as a realistic foundation for further implementation rather than a final consumer-ready application.
+
+## Project layout
+
+- App/ — app lifecycle, UI wiring, and Growl integration
+- Audio/ — ALAC decoder and CoreAudio output path
 - Network/ — RAOP/RTSP/RTP receiver logic
-- Metadata/ — track and artwork metadata parsing
+- Metadata/ — track and cover-art metadata parsing
 - UI/ — Cocoa UI and cover-art view
-- Resources/ — project resources, assets, and nib-related files
-- Build/ — generated or helper build artifacts
-- Project/ — Tiger project metadata and compatibility notes
+- Resources/ — app resources and localization
+- Project/ — Tiger-era Xcode metadata and project setup notes
 
 ## Architectural flow
 
-The app is structured around:
-
-- Bonjour discovery of AirPlay sources
-- RTSP session control for play/pause/next/previous/volume
-- RTP audio stream handling
-- ALAC decode boundary and PCM generation
-- CoreAudio playback on the local Mac
-- Cover art display from embedded metadata
-- Growl notifications for track changes
-
-## Growl support
-
-The app includes a lightweight Growl notifier that posts a notification when the currently playing track changes.
-
-To enable it in a Tiger build:
-
-- add the Growl framework to the project
-- compile with `-DAIRPLAY_GROWL_AVAILABLE=1`
-- ensure the runtime has Growl installed
-
-When the flag is off, the code compiles as a no-op and does not require Growl at runtime.
-
-## Build target
-
-This code was written with Tiger-era Cocoa compatibility in mind:
-
-- Objective-C and Cocoa
-- PowerPC and Intel ABI-safe code
-- Foundation/AppKit and CoreAudio
-- non-ARC style coding for legacy compatibility
-
-## Xcode setup overview
-
 ```mermaid
 flowchart TD
-    A[AirPlayReceiver target] --> B[App/AirPlayReceiverAppDelegate]
-    A --> C[App/main.m]
-    A --> D[App/GrowlNotifier]
-
-    B --> E[Network/RAOPReceiver]
-    E --> F[Bonjour discovery]
-    E --> G[RTSP control]
-    E --> H[RTP stream]
-
-    H --> I[Audio/ALACDecoder]
-    I --> J[Audio/CoreAudioPlayer]
-
-    H --> K[Metadata/AirPlayMetadataParser]
-    K --> L[Track + artwork metadata]
-    L --> B
-
-    B --> M[UI/CoverArtView]
-    B --> N[Main window + playback controls]
-    D --> O[Growl notification]
+    A[AirPlay source] --> B[Bonjour discovery]
+    B --> C[RTSP control]
+    C --> D[RTP audio stream]
+    D --> E[ALAC decode]
+    E --> F[CoreAudio playback]
+    C --> G[Metadata parser]
+    G --> H[Track + artwork metadata]
+    H --> I[Growl notification]
+    H --> J[Main Cocoa UI]
 ```
 
-## Xcode setup checklist
+## Features
 
-1. Create a Cocoa Application target named `AirPlayReceiver`.
-2. Set the deployment target to `10.4`.
-3. Configure architectures for `ppc` and `i386`.
-4. Build with an older GCC or Tiger-era toolchain.
-5. Disable ARC: `GCC_ENABLE_OBJC_ARC = NO`.
-6. Add the frameworks: `Cocoa`, `CoreAudio`, `AudioToolbox`, and optionally `Growl`.
-7. Import source files into groups matching the project layout:
-   - App/
-   - Audio/
-   - Network/
-   - Metadata/
-   - UI/
-8. Add the application plist and nib resource files from the project folder.
-9. Keep all compiler and framework usage compatible with Tiger-era APIs.
-10. Validate with a syntax-only build before live protocol testing.
+- Legacy Cocoa app skeleton for Tiger
+- RTSP/RTP session negotiation modeling
+- ALAC decode boundary and PCM generation path
+- CoreAudio playback sink
+- Metadata parsing for title, artist, album, and artwork
+- Growl notifications on track changes
+- Project structure aligned with a classic Xcode Tiger workflow
 
-## Required pieces for a real implementation
+## Build and validation
 
-1. Bonjour service discovery (`_raop._tcp`)
-2. RTSP negotiation over port 5000
-3. AES key exchange and session setup
-4. RTP packet streaming and reassembly
-5. ALAC decoding into PCM
-6. AudioQueue/CoreAudio playback
-7. Artwork extraction from metadata tags
+This project is set up with a Tiger-oriented syntax validation flow. A lightweight build helper is available at [Project/build.sh](Project/build.sh).
 
-## Main implementation classes
+```bash
+cd /Users/jan/airplay_tiger_receiver
+./Project/build.sh
+```
 
-The primary classes are:
+The script is intended for local syntax validation and compatibility checks in a legacy Objective-C/Cocoa build environment.
 
-- `App/AirPlayReceiverAppDelegate`
-- `Network/RAOPReceiver`
-- `UI/CoverArtView`
-- `Audio/ALACDecoder`
-- `Metadata/AirPlayMetadataParser`
-- `Audio/CoreAudioPlayer`
-- `App/GrowlNotifier`
+## GitHub release checklist
 
-These are designed to be extended into a full Tiger-compatible receiver.
+See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the release checklist used to validate the app before shipping prototypes or tagged builds.
 
 ## Notes
 
-A complete implementation is a substantial engineering effort, but the folder structure and protocol boundaries in this project provide a clean foundation for a Tiger-compatible PowerPlay architecture.
+This repository is a practical starting point for a Tiger-era AirPlay receiver, not a complete drop-in implementation. It is best viewed as a protocol-first engineering prototype and architecture reference.
