@@ -218,26 +218,23 @@
             buildSettings = {
                 ALWAYS_SEARCH_USER_PATHS = NO;
                 ARCHS = (
-                    "$(NATIVE_ARCH_ACTUAL)" ,
                     i386,
                     ppc,
                 );
-                CLANG_ENABLE_OBJC_ARC = NO;
-                CODE_SIGNING_ALLOWED = NO;
                 COPY_PHASE_STRIP = NO;
                 GCC_DYNAMIC_NO_PIC = NO;
                 GCC_ENABLE_FIX_AND_CONTINUE = YES;
+                GCC_ENABLE_OBJC_ARC = NO;
                 GCC_MODEL_TUNING = G5;
                 GCC_OPTIMIZATION_LEVEL = 0;
                 GCC_PRECOMPILE_PREFIX_HEADER = NO;
-                GCC_VERSION = com.apple.compilers.llvmgcc42;
+                GCC_VERSION = 4.0;
                 GCC_WARN_ABOUT_RETURN_TYPE = YES;
                 GCC_WARN_UNUSED_VARIABLE = YES;
                 INFOPLIST_FILE = Project/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 10.4;
-                ONLY_ACTIVE_ARCH = YES;
-                PRODUCT_BUNDLE_IDENTIFIER = com.example.AirPlayReceiver;
-                PRODUCT_NAME = AirPlayReceiver;
+                PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
+                PRODUCT_NAME = PowerPlay;
                 SDKROOT = macosx;
             };
             name = Debug;
@@ -248,24 +245,22 @@
             buildSettings = {
                 ALWAYS_SEARCH_USER_PATHS = NO;
                 ARCHS = (
-                    "$(NATIVE_ARCH_ACTUAL)" ,
                     i386,
                     ppc,
                 );
-                CLANG_ENABLE_OBJC_ARC = NO;
-                CODE_SIGNING_ALLOWED = NO;
                 COPY_PHASE_STRIP = YES;
                 GCC_ENABLE_FIX_AND_CONTINUE = NO;
+                GCC_ENABLE_OBJC_ARC = NO;
                 GCC_MODEL_TUNING = G5;
                 GCC_OPTIMIZATION_LEVEL = s;
                 GCC_PRECOMPILE_PREFIX_HEADER = NO;
-                GCC_VERSION = com.apple.compilers.llvmgcc42;
+                GCC_VERSION = 4.0;
                 GCC_WARN_ABOUT_RETURN_TYPE = YES;
                 GCC_WARN_UNUSED_VARIABLE = YES;
                 INFOPLIST_FILE = Project/Info.plist;
                 MACOSX_DEPLOYMENT_TARGET = 10.4;
-                PRODUCT_BUNDLE_IDENTIFIER = com.example.AirPlayReceiver;
-                PRODUCT_NAME = AirPlayReceiver;
+                PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
+                PRODUCT_NAME = PowerPlay;
                 SDKROOT = macosx;
             };
             name = Release;
