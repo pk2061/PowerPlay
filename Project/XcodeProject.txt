@@ -1,0 +1,32 @@
+This project is intended to be opened in Xcode 2.x / 3.x for Mac OS X 10.4 Tiger.
+
+Suggested project settings:
+- Project Type: Cocoa Application
+- Base SDK: 10.4 (or the latest compatible Tiger SDK)
+- Architectures: ppc, i386
+- Build using GCC 4.0 / older Apple GCC toolchain
+- Objective-C runtime: legacy non-ARC
+- Deployment target: 10.4
+
+Bundle identifier: com.example.AirPlayReceiver
+Executable name: AirPlayReceiver
+
+Required source files:
+- main.m
+- AirPlayReceiverAppDelegate.m / .h
+- RAOPReceiver.m / .h
+- ALACDecoder.m / .h
+- AirPlayMetadataParser.m / .h
+- CoreAudioPlayer.m / .h
+- CoverArtView.m / .h
+- GrowlNotifier.m / .h
+
+Frameworks:
+- Cocoa
+- CoreAudio
+- AudioToolbox
+- optional: Growl
+
+Notes:
+- PowerPC support requires compiler settings compatible with old GCC and no ARC.
+- This is a protocol-oriented foundation only, not a drop-in AirPlay implementation.

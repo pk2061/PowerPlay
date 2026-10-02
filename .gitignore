@@ -1,0 +1,8 @@
+.DS_Store
+**/.DS_Store
+*.o
+*.out
+a.out
+*.xcworkspace
+xcuserdata/
+.DS_Store

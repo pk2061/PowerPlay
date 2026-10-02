@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="11500" systemVersion="10.4" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none">
+    <dependencies>
+        <deployment version="10.4" identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="11500"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="NSApplication"/>
+        <customObject id="-1" userLabel="Application" customClass="NSObject"/>
+        <customObject id="9" userLabel="AirPlayReceiverAppDelegate" customClass="AirPlayReceiverAppDelegate"/>
+        <menu title="MainMenu" systemMenu="yes" autoenablesItems="NO" id="29">
+            <items>
+                <menuItem title="AirPlayReceiver" id="57">
+                    <menu keyEquivalent=""/>
+                </menuItem>
+            </items>
+        </menu>
+        <window title="Tiger AirPlay Receiver" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="YES" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="MainWindow" id="5">
+            <windowStyleMask key="NSWindowStyleMaskTitled" value="1"/>
+            <windowStyleMask key="NSWindowStyleMaskClosable" value="2"/>
+            <windowStyleMask key="NSWindowStyleMaskMiniaturizable" value="4"/>
+            <windowPositionMask key="NSWindowPositionMask" value="14"/>
+            <contentView id="6"/>
+        </window>
+    </objects>
+    <resources/>
+</document>
