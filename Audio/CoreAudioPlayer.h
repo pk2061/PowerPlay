@@ -1,21 +1,18 @@
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
+#import <AudioUnit/AudioUnit.h>
+#import <CoreServices/CoreServices.h>
 
 @interface CoreAudioPlayer : NSObject {
-    AudioQueueRef audioQueue;
+    AudioUnit outputUnit;
     AudioStreamBasicDescription streamFormat;
     BOOL isPlaying;
     NSMutableData *queuedAudio;
-    UInt32 queueBufferBytes;
-    UInt32 queueBufferCount;
-    float targetLatencySeconds;
 }
 
 - (id)initWithFormat:(AudioStreamBasicDescription)format;
-- (UInt32)recommendedBufferSize;
-- (void)prepareQueueBuffers;
-- (void)refillOutputBuffer:(AudioQueueRef)queue buffer:(AudioQueueBufferRef)buffer;
+- (OSStatus)renderAudioToBufferList:(AudioBufferList *)bufferList frames:(UInt32)frameCount;
 - (void)start;
 - (void)stop;
 - (void)enqueuePCMData:(NSData *)pcmData;

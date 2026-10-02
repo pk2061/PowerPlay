@@ -6,6 +6,7 @@
 cd "$(dirname "$0")/.."
 clang -fsyntax-only -x objective-c -fno-objc-arc \
     -framework Cocoa \
+    -framework AudioUnit -framework CoreServices \
     -I. -IApp -IAudio -INetwork -IMetadata -IUI \
     -DAIRPLAY_GROWL_AVAILABLE=0 \
     Audio/ALACDecoder.m Metadata/AirPlayMetadataParser.m Audio/CoreAudioPlayer.m \

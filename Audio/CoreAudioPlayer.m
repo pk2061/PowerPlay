@@ -1,158 +1,148 @@
 #import "CoreAudioPlayer.h"
 
-static void AQOutputCallback(void *inUserData, AudioQueueRef inAQ,
-                            AudioQueueBufferRef inBuffer) {
-    CoreAudioPlayer *player = (CoreAudioPlayer *)inUserData;
+static OSStatus AUOutputCallback(void *inRefCon,
+                                AudioUnitRenderActionFlags *ioActionFlags,
+                                const AudioTimeStamp *inTimeStamp,
+                                UInt32 inBusNumber,
+                                UInt32 inNumberFrames,
+                                AudioBufferList *ioData) {
+    (void)ioActionFlags;
+    (void)inTimeStamp;
+    (void)inBusNumber;
+    CoreAudioPlayer *player = (CoreAudioPlayer *)inRefCon;
     if (player == nil) {
-        return;
+        return noErr;
     }
-
-    if (![player isPlaying]) {
-        AudioQueueFreeBuffer(inAQ, inBuffer);
-        return;
-    }
-
-    [player refillOutputBuffer:inAQ buffer:inBuffer];
+    return [player renderAudioToBufferList:ioData frames:inNumberFrames];
 }
 
 @implementation CoreAudioPlayer
 
-- (UInt32)recommendedBufferSize {
-    if (streamFormat.mSampleRate <= 0.0) {
-        return 4096;
+- (OSStatus)renderAudioToBufferList:(AudioBufferList *)bufferList frames:(UInt32)frameCount {
+    if (bufferList == NULL) {
+        return noErr;
     }
 
-    const UInt32 bytesPerSample = (streamFormat.mBitsPerChannel * streamFormat.mChannelsPerFrame) / 8;
-    const UInt32 framesPerBuffer = (UInt32)(streamFormat.mSampleRate * targetLatencySeconds / 1.0);
-    UInt32 bytesPerBuffer = framesPerBuffer * bytesPerSample;
-    if (bytesPerBuffer < 2048) {
-        bytesPerBuffer = 2048;
-    }
-    if (bytesPerBuffer > 16384) {
-        bytesPerBuffer = 16384;
-    }
-    return bytesPerBuffer;
-}
-
-- (void)prepareQueueBuffers {
-    if (audioQueue == NULL || queueBufferBytes == 0) {
-        return;
-    }
-
-    for (UInt32 i = 0; i < queueBufferCount; i++) {
-        AudioQueueBufferRef buffer = NULL;
-        OSStatus status = AudioQueueAllocateBuffer(audioQueue, queueBufferBytes, &buffer);
-        if (status == noErr && buffer != NULL) {
-            memset(buffer->mAudioData, 0, queueBufferBytes);
-            buffer->mAudioDataByteSize = queueBufferBytes;
-            AudioQueueEnqueueBuffer(audioQueue, buffer, 0, NULL);
-        }
-    }
-}
-
-- (void)refillOutputBuffer:(AudioQueueRef)queue buffer:(AudioQueueBufferRef)buffer {
-    if (buffer == NULL || queue == NULL) {
-        return;
-    }
-
+    UInt32 bytesRequested = frameCount * streamFormat.mBytesPerFrame;
     UInt32 bytesAvailable = (UInt32)[queuedAudio length];
-    UInt32 bytesToCopy = 0;
-    if (bytesAvailable > 0) {
-        bytesToCopy = MIN((UInt32)buffer->mAudioDataBytesCapacity, bytesAvailable);
-        memcpy(buffer->mAudioData, [queuedAudio bytes], bytesToCopy);
-        [queuedAudio replaceBytesInRange:NSMakeRange(0, bytesToCopy) withBytes:NULL length:0];
+    UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
+    const void *queuedBytes = [queuedAudio bytes];
+
+    for (UInt32 i = 0; i < bufferList->mNumberBuffers; i++) {
+        AudioBuffer *buffer = &bufferList->mBuffers[i];
+        UInt32 copyLength = (i == 0) ? bytesToCopy : 0;
+        if (buffer->mData != NULL) {
+            if (copyLength > 0) {
+                memcpy(buffer->mData, queuedBytes, copyLength);
+            }
+            if (copyLength < bytesRequested) {
+                memset((unsigned char *)buffer->mData + copyLength, 0,
+                       bytesRequested - copyLength);
+            }
+        }
+        buffer->mDataByteSize = bytesRequested;
     }
 
-    if (bytesToCopy < buffer->mAudioDataBytesCapacity) {
-        memset(((unsigned char *)buffer->mAudioData) + bytesToCopy, 0, buffer->mAudioDataBytesCapacity - bytesToCopy);
+    if (bytesToCopy > 0) {
+        [queuedAudio replaceBytesInRange:NSMakeRange(0, bytesToCopy)
+                               withBytes:NULL
+                                  length:0];
     }
-    buffer->mAudioDataByteSize = buffer->mAudioDataBytesCapacity;
-    AudioQueueEnqueueBuffer(queue, buffer, 0, NULL);
+    return noErr;
 }
 
 - (id)initWithFormat:(AudioStreamBasicDescription)format {
     self = [super init];
     if (self != nil) {
         streamFormat = format;
-        audioQueue = NULL;
+        outputUnit = NULL;
         isPlaying = NO;
         queuedAudio = [[NSMutableData alloc] init];
-        queueBufferCount = 3;
-        targetLatencySeconds = 0.05f;
-        queueBufferBytes = 0;
 
-        OSStatus status = AudioQueueNewOutput(&streamFormat, AQOutputCallback, self,
-                                              NULL, NULL, 0, &audioQueue);
-        if (status != noErr || audioQueue == NULL) {
-            NSLog(@"CoreAudio: failed to create output queue (%d)", (int)status);
-        } else {
-            queueBufferBytes = [self recommendedBufferSize];
-            [self prepareQueueBuffers];
-            AudioQueueSetParameter(audioQueue, kAudioQueueParam_Volume, 1.0f);
+        ComponentDescription description;
+        memset(&description, 0, sizeof(description));
+        description.componentType = kAudioUnitType_Output;
+        description.componentSubType = kAudioUnitSubType_DefaultOutput;
+        description.componentManufacturer = kAudioUnitManufacturer_Apple;
+
+        Component component = FindNextComponent(NULL, &description);
+        ComponentInstance componentInstance = NULL;
+        OSStatus status = component == NULL ? -1 : OpenAComponent(component, &componentInstance);
+        if (status == noErr && componentInstance != NULL) {
+            outputUnit = (AudioUnit)componentInstance;
+
+            AURenderCallbackStruct callback;
+            callback.inputProc = AUOutputCallback;
+            callback.inputProcRefCon = self;
+
+            status = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_StreamFormat,
+                                          kAudioUnitScope_Input, 0, &streamFormat,
+                                          sizeof(streamFormat));
+            if (status == noErr) {
+                status = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback,
+                                              kAudioUnitScope_Input, 0, &callback,
+                                              sizeof(callback));
+            }
+            if (status == noErr) {
+                status = AudioUnitInitialize(outputUnit);
+            }
+        }
+
+        if (status != noErr || outputUnit == NULL) {
+            NSLog(@"CoreAudio: failed to initialize output unit (%d)", (int)status);
+            if (outputUnit != NULL) {
+                CloseComponent((ComponentInstance)outputUnit);
+                outputUnit = NULL;
+            }
         }
     }
     return self;
 }
 
 - (void)dealloc {
-    if (audioQueue != NULL) {
-        AudioQueueStop(audioQueue, YES);
-        AudioQueueDispose(audioQueue, YES);
-        audioQueue = NULL;
+    if (outputUnit != NULL) {
+        if (isPlaying) {
+            AudioOutputUnitStop(outputUnit);
+        }
+        AudioUnitUninitialize(outputUnit);
+        CloseComponent((ComponentInstance)outputUnit);
+        outputUnit = NULL;
     }
     [queuedAudio release];
     [super dealloc];
 }
 
 - (void)start {
-    if (audioQueue == NULL) {
+    if (outputUnit == NULL) {
         return;
     }
 
     if (!isPlaying) {
-        AudioQueueStart(audioQueue, NULL);
-        isPlaying = YES;
+        OSStatus status = AudioOutputUnitStart(outputUnit);
+        if (status == noErr) {
+            isPlaying = YES;
+        } else {
+            NSLog(@"CoreAudio: failed to start output unit (%d)", (int)status);
+        }
     }
 }
 
 - (void)stop {
-    if (audioQueue == NULL) {
+    if (outputUnit == NULL) {
         return;
     }
 
-    AudioQueueStop(audioQueue, YES);
+    AudioOutputUnitStop(outputUnit);
     isPlaying = NO;
     [queuedAudio setLength:0];
 }
 
 - (void)enqueuePCMData:(NSData *)pcmData {
-    if (pcmData == nil || [pcmData length] == 0 || audioQueue == NULL) {
+    if (pcmData == nil || [pcmData length] == 0 || outputUnit == NULL) {
         return;
     }
 
     [queuedAudio appendData:pcmData];
-
-    if (!isPlaying) {
-        return;
-    }
-
-    if ([queuedAudio length] >= queueBufferBytes * 2) {
-        AudioQueueBufferRef buffer = NULL;
-        OSStatus status = AudioQueueAllocateBuffer(audioQueue, queueBufferBytes, &buffer);
-        if (status == noErr && buffer != NULL) {
-            UInt32 bytesToCopy = MIN((UInt32)queueBufferBytes, (UInt32)[queuedAudio length]);
-            memcpy(buffer->mAudioData, [queuedAudio bytes], bytesToCopy);
-            [queuedAudio replaceBytesInRange:NSMakeRange(0, bytesToCopy) withBytes:NULL length:0];
-            if (bytesToCopy < queueBufferBytes) {
-                memset(((unsigned char *)buffer->mAudioData) + bytesToCopy, 0, queueBufferBytes - bytesToCopy);
-            }
-            buffer->mAudioDataByteSize = queueBufferBytes;
-            status = AudioQueueEnqueueBuffer(audioQueue, buffer, 0, NULL);
-            if (status != noErr) {
-                AudioQueueFreeBuffer(audioQueue, buffer);
-            }
-        }
-    }
 }
 
 - (BOOL)isPlaying {

@@ -168,6 +168,8 @@
                 8D1107380486CEB800E47090 /* Cocoa.framework in Frameworks */,
                 8D1107390486CEB800E47090 /* CoreAudio.framework in Frameworks */,
                 8D1107400486CEB800E47090 /* AudioToolbox.framework in Frameworks */,
+                8D1107430486CEB800E47090 /* AudioUnit.framework in Frameworks */,
+                8D1107450486CEB800E47090 /* CoreServices.framework in Frameworks */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
@@ -432,6 +434,14 @@
             isa = PBXBuildFile;
             fileRef = 8D11071C0486CEB800E47090 /* MainMenu.xib */;
         };
+        8D1107430486CEB800E47090 /* AudioUnit.framework in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107460486CEB800E47090 /* AudioUnit.framework */;
+        };
+        8D1107450486CEB800E47090 /* CoreServices.framework in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107470486CEB800E47090 /* CoreServices.framework */;
+        };
         8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */ = {
             isa = PBXBuildFile;
             fileRef = 8D11071E0486CEB800E47090 /* PowerPlay.icns */;
@@ -453,6 +463,18 @@
             isa = PBXFileReference;
             name = AudioToolbox.framework;
             path = "/System/Library/Frameworks/AudioToolbox.framework";
+            sourceTree = SDKROOT;
+        };
+        8D1107460486CEB800E47090 /* AudioUnit.framework */ = {
+            isa = PBXFileReference;
+            name = AudioUnit.framework;
+            path = "/System/Library/Frameworks/AudioUnit.framework";
+            sourceTree = SDKROOT;
+        };
+        8D1107470486CEB800E47090 /* CoreServices.framework */ = {
+            isa = PBXFileReference;
+            name = CoreServices.framework;
+            path = "/System/Library/Frameworks/CoreServices.framework";
             sourceTree = SDKROOT;
         };
     };
