@@ -1,4 +1,4 @@
-This folder contains project resources for the legacy AirPlay receiver app.
+This folder contains project resources for the PowerPlay app.
 
 Included files:
 - Images/AirPlayReceiver.icns

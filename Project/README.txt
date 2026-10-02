@@ -1,4 +1,4 @@
-Tiger AirPlay Receiver Project Layout
+PowerPlay Project Layout
 
 This folder contains the project metadata and Tiger-era Xcode compatibility notes for the app skeleton.
 
@@ -31,4 +31,4 @@ Core source files by area:
 
 Notes:
 - This is a compatibility-oriented project layout for older Xcode/GCC toolchains.
-- It is not a complete finished app, but it provides the correct architectural separation for a Tiger-era AirPlay receiver implementation.
+- It is not a complete finished app, but it provides the correct architectural separation for a Tiger-era PowerPlay implementation.

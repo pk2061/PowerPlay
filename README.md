@@ -1,6 +1,6 @@
-# AirPlay Receiver for Tiger
+# PowerPlay
 
-This project is a Tiger-era AirPlay receiver skeleton intended to run on both PowerPC and Intel Macs. It is designed as a realistic protocol-oriented foundation for a classic AirPlay audio receiver rather than a finished turnkey application.
+PowerPlay is a Tiger-era AirPlay receiver skeleton intended to run on both PowerPC and Intel Macs. It is designed as a realistic protocol-oriented foundation for a classic AirPlay audio receiver rather than a finished turnkey application.
 
 ## Important caveat
 
@@ -123,4 +123,4 @@ These are designed to be extended into a full Tiger-compatible receiver.
 
 ## Notes
 
-A complete implementation is a substantial engineering effort, but the folder structure and protocol boundaries in this project provide a clean foundation for a Tiger-compatible AirPlay receiver architecture.
+A complete implementation is a substantial engineering effort, but the folder structure and protocol boundaries in this project provide a clean foundation for a Tiger-compatible PowerPlay architecture.
