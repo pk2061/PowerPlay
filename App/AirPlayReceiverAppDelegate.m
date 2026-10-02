@@ -17,7 +17,7 @@
                                          styleMask:(NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask)
                                            backing:NSBackingStoreBuffered
                                              defer:NO];
-    [window setTitle:@"Tiger AirPlay Receiver"];
+    [window setTitle:@"PowerPlay"];
     [window center];
 
     NSView *content = [window contentView];

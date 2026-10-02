@@ -15,7 +15,7 @@
                 </menuItem>
             </items>
         </menu>
-        <window title="Tiger AirPlay Receiver" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="YES" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="MainWindow" id="5">
+        <window title="PowerPlay" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="YES" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="MainWindow" id="5">
             <windowStyleMask key="NSWindowStyleMaskTitled" value="1"/>
             <windowStyleMask key="NSWindowStyleMaskClosable" value="2"/>
             <windowStyleMask key="NSWindowStyleMaskMiniaturizable" value="4"/>
