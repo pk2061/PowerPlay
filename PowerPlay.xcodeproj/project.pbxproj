@@ -1,0 +1,479 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {
+    };
+    objectVersion = 39;
+    objects = {
+
+        29B97313FDCFA39411CA2CEA /* Project object */ = {
+            isa = PBXProject;
+            attributes = {
+                ORGANIZATIONNAME = "PowerPlay";
+            };
+            buildConfigurationList = 29B97315FDCFA39411CA2CEA /* Build configuration list for PBXProject */;
+            compatibilityVersion = "Xcode 2.5";
+            mainGroup = 29B97314FDCFA39411CA2CEA;
+            projectDirPath = "";
+            projectRoot = "";
+            targets = (
+                8D1107260486CEB800E47090,
+            );
+        };
+
+        29B97314FDCFA39411CA2CEA /* Root */ = {
+            isa = PBXGroup;
+            children = (
+                29B97315FDCFA39411CA2CEA /* App */,
+                29B97316FDCFA39411CA2CEA /* Audio */,
+                29B97317FDCFA39411CA2CEA /* Network */,
+                29B97318FDCFA39411CA2CEA /* Metadata */,
+                29B97319FDCFA39411CA2CEA /* UI */,
+                29B9731AFDCFA39411CA2CEA /* Project */,
+                29B9731BFDCFA39411CA2CEA /* Resources */,
+                8D11071E0486CEB800E47090 /* Products */,
+            );
+            sourceTree = "<group>";
+        };
+
+        29B97315FDCFA39411CA2CEA /* App */ = {
+            isa = PBXGroup;
+            children = (
+                8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */,
+                8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */,
+                8D11070E0486CEB800E47090 /* GrowlNotifier.h */,
+                8D11070F0486CEB800E47090 /* GrowlNotifier.m */,
+                8D1107100486CEB800E47090 /* main.m */,
+            );
+            path = App;
+            sourceTree = "<group>";
+        };
+
+        29B97316FDCFA39411CA2CEA /* Audio */ = {
+            isa = PBXGroup;
+            children = (
+                8D1107110486CEB800E47090 /* ALACDecoder.h */,
+                8D1107120486CEB800E47090 /* ALACDecoder.m */,
+                8D1107130486CEB800E47090 /* CoreAudioPlayer.h */,
+                8D1107140486CEB800E47090 /* CoreAudioPlayer.m */,
+            );
+            path = Audio;
+            sourceTree = "<group>";
+        };
+
+        29B97317FDCFA39411CA2CEA /* Network */ = {
+            isa = PBXGroup;
+            children = (
+                8D1107150486CEB800E47090 /* RAOPReceiver.h */,
+                8D1107160486CEB800E47090 /* RAOPReceiver.m */,
+            );
+            path = Network;
+            sourceTree = "<group>";
+        };
+
+        29B97318FDCFA39411CA2CEA /* Metadata */ = {
+            isa = PBXGroup;
+            children = (
+                8D1107170486CEB800E47090 /* AirPlayMetadataParser.h */,
+                8D1107180486CEB800E47090 /* AirPlayMetadataParser.m */,
+            );
+            path = Metadata;
+            sourceTree = "<group>";
+        };
+
+        29B97319FDCFA39411CA2CEA /* UI */ = {
+            isa = PBXGroup;
+            children = (
+                8D1107190486CEB800E47090 /* CoverArtView.h */,
+                8D11071A0486CEB800E47090 /* CoverArtView.m */,
+            );
+            path = UI;
+            sourceTree = "<group>";
+        };
+
+        29B9731AFDCFA39411CA2CEA /* Project */ = {
+            isa = PBXGroup;
+            children = (
+                8D11071B0486CEB800E47090 /* Info.plist */,
+                8D11071C0486CEB800E47090 /* MainMenu.xib */,
+                8D11071D0486CEB800E47090 /* build.sh */,
+            );
+            path = Project;
+            sourceTree = "<group>";
+        };
+
+        29B9731BFDCFA39411CA2CEA /* Resources */ = {
+            isa = PBXGroup;
+            children = (
+                8D11071E0486CEB800E47090 /* PowerPlay.icns */,
+            );
+            path = Resources/Images;
+            sourceTree = "<group>";
+        };
+
+        8D11071E0486CEB800E47090 /* Products */ = {
+            isa = PBXGroup;
+            children = (
+                8D11072F0486CEB800E47090 /* PowerPlay.app */,
+            );
+            sourceTree = "<group>";
+        };
+
+        8D1107260486CEB800E47090 /* PowerPlay */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = 8D1107270486CEB800E47090 /* Build configuration list for PBXNativeTarget "PowerPlay" */;
+            buildPhases = (
+                8D1107280486CEB800E47090 /* Sources */,
+                8D1107290486CEB800E47090 /* Frameworks */,
+                8D11072A0486CEB800E47090 /* Resources */,
+            );
+            buildRules = (
+            );
+            dependencies = (
+            );
+            name = PowerPlay;
+            productName = PowerPlay;
+            productReference = 8D11072F0486CEB800E47090 /* PowerPlay.app */;
+            productType = "com.apple.product-type.application";
+        };
+
+        8D11072F0486CEB800E47090 /* PowerPlay.app */ = {
+            isa = PBXFileReference;
+            explicitFileType = wrapper.application;
+            includeInIndex = 0;
+            path = PowerPlay.app;
+            sourceTree = BUILT_PRODUCTS_DIR;
+        };
+
+        8D1107280486CEB800E47090 /* Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                8D1107300486CEB800E47090 /* AirPlayReceiverAppDelegate.m in Sources */,
+                8D1107310486CEB800E47090 /* GrowlNotifier.m in Sources */,
+                8D1107320486CEB800E47090 /* main.m in Sources */,
+                8D1107330486CEB800E47090 /* ALACDecoder.m in Sources */,
+                8D1107340486CEB800E47090 /* CoreAudioPlayer.m in Sources */,
+                8D1107350486CEB800E47090 /* RAOPReceiver.m in Sources */,
+                8D1107360486CEB800E47090 /* AirPlayMetadataParser.m in Sources */,
+                8D1107370486CEB800E47090 /* CoverArtView.m in Sources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+
+        8D1107290486CEB800E47090 /* Frameworks */ = {
+            isa = PBXFrameworksBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                8D1107380486CEB800E47090 /* Cocoa.framework in Frameworks */,
+                8D1107390486CEB800E47090 /* CoreAudio.framework in Frameworks */,
+                8D11073A0486CEB800E47090 /* AudioToolbox.framework in Frameworks */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+
+        8D11072A0486CEB800E47090 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                8D11073B0486CEB800E47090 /* Info.plist in Resources */,
+                8D11073C0486CEB800E47090 /* MainMenu.xib in Resources */,
+                8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+
+        8D1107270486CEB800E47090 /* Build configuration list for PBXNativeTarget "PowerPlay" */ = {
+            isa = XCConfigurationList;
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+            buildConfigurations = (
+                8D11073E0486CEB800E47090 /* Debug */,
+                8D11073F0486CEB800E47090 /* Release */,
+            );
+        };
+
+        8D11073E0486CEB800E47090 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ALWAYS_SEARCH_USER_PATHS = NO;
+                ARCHS = (
+                    i386,
+                    ppc,
+                );
+                COPY_PHASE_STRIP = NO;
+                GCC_DYNAMIC_NO_PIC = NO;
+                GCC_ENABLE_OBJC_ARC = NO;
+                GCC_ENABLE_FIX_AND_CONTINUE = YES;
+                GCC_MODEL_TUNING = G5;
+                GCC_OPTIMIZATION_LEVEL = 0;
+                GCC_PRECOMPILE_PREFIX_HEADER = NO;
+                GCC_VERSION = 4.0;
+                GCC_WARN_ABOUT_RETURN_TYPE = YES;
+                GCC_WARN_UNUSED_VARIABLE = YES;
+                INFOPLIST_FILE = "Project/Info.plist";
+                MACOSX_DEPLOYMENT_TARGET = 10.4;
+                PRODUCT_NAME = PowerPlay;
+                PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
+                SDKROOT = macosx;
+                WRAPPER_EXTENSION = app;
+            };
+            name = Debug;
+        };
+
+        8D11073F0486CEB800E47090 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                ALWAYS_SEARCH_USER_PATHS = NO;
+                ARCHS = (
+                    i386,
+                    ppc,
+                );
+                COPY_PHASE_STRIP = YES;
+                GCC_DYNAMIC_NO_PIC = NO;
+                GCC_ENABLE_OBJC_ARC = NO;
+                GCC_ENABLE_FIX_AND_CONTINUE = NO;
+                GCC_MODEL_TUNING = G5;
+                GCC_OPTIMIZATION_LEVEL = s;
+                GCC_PRECOMPILE_PREFIX_HEADER = NO;
+                GCC_VERSION = 4.0;
+                GCC_WARN_ABOUT_RETURN_TYPE = YES;
+                GCC_WARN_UNUSED_VARIABLE = YES;
+                INFOPLIST_FILE = "Project/Info.plist";
+                MACOSX_DEPLOYMENT_TARGET = 10.4;
+                PRODUCT_NAME = PowerPlay;
+                PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
+                SDKROOT = macosx;
+                WRAPPER_EXTENSION = app;
+            };
+            name = Release;
+        };
+
+        29B97315FDCFA39411CA2CEA /* Build configuration list for PBXProject */ = {
+            isa = XCConfigurationList;
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+            buildConfigurations = (
+                8D11073E0486CEB800E47090 /* Debug */,
+                8D11073F0486CEB800E47090 /* Release */,
+            );
+        };
+
+        8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */ = {
+            isa = PBXFileReference;
+            fileRef = "App/AirPlayReceiverAppDelegate.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "App/AirPlayReceiverAppDelegate.h";
+            sourceTree = "<group>";
+        };
+        8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */ = {
+            isa = PBXFileReference;
+            fileRef = "App/AirPlayReceiverAppDelegate.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "App/AirPlayReceiverAppDelegate.m";
+            sourceTree = "<group>";
+        };
+        8D11070E0486CEB800E47090 /* GrowlNotifier.h */ = {
+            isa = PBXFileReference;
+            fileRef = "App/GrowlNotifier.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "App/GrowlNotifier.h";
+            sourceTree = "<group>";
+        };
+        8D11070F0486CEB800E47090 /* GrowlNotifier.m */ = {
+            isa = PBXFileReference;
+            fileRef = "App/GrowlNotifier.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "App/GrowlNotifier.m";
+            sourceTree = "<group>";
+        };
+        8D1107100486CEB800E47090 /* main.m */ = {
+            isa = PBXFileReference;
+            fileRef = "App/main.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "App/main.m";
+            sourceTree = "<group>";
+        };
+
+        8D1107110486CEB800E47090 /* ALACDecoder.h */ = {
+            isa = PBXFileReference;
+            fileRef = "Audio/ALACDecoder.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "Audio/ALACDecoder.h";
+            sourceTree = "<group>";
+        };
+        8D1107120486CEB800E47090 /* ALACDecoder.m */ = {
+            isa = PBXFileReference;
+            fileRef = "Audio/ALACDecoder.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "Audio/ALACDecoder.m";
+            sourceTree = "<group>";
+        };
+        8D1107130486CEB800E47090 /* CoreAudioPlayer.h */ = {
+            isa = PBXFileReference;
+            fileRef = "Audio/CoreAudioPlayer.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "Audio/CoreAudioPlayer.h";
+            sourceTree = "<group>";
+        };
+        8D1107140486CEB800E47090 /* CoreAudioPlayer.m */ = {
+            isa = PBXFileReference;
+            fileRef = "Audio/CoreAudioPlayer.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "Audio/CoreAudioPlayer.m";
+            sourceTree = "<group>";
+        };
+
+        8D1107150486CEB800E47090 /* RAOPReceiver.h */ = {
+            isa = PBXFileReference;
+            fileRef = "Network/RAOPReceiver.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "Network/RAOPReceiver.h";
+            sourceTree = "<group>";
+        };
+        8D1107160486CEB800E47090 /* RAOPReceiver.m */ = {
+            isa = PBXFileReference;
+            fileRef = "Network/RAOPReceiver.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "Network/RAOPReceiver.m";
+            sourceTree = "<group>";
+        };
+
+        8D1107170486CEB800E47090 /* AirPlayMetadataParser.h */ = {
+            isa = PBXFileReference;
+            fileRef = "Metadata/AirPlayMetadataParser.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "Metadata/AirPlayMetadataParser.h";
+            sourceTree = "<group>";
+        };
+        8D1107180486CEB800E47090 /* AirPlayMetadataParser.m */ = {
+            isa = PBXFileReference;
+            fileRef = "Metadata/AirPlayMetadataParser.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "Metadata/AirPlayMetadataParser.m";
+            sourceTree = "<group>";
+        };
+
+        8D1107190486CEB800E47090 /* CoverArtView.h */ = {
+            isa = PBXFileReference;
+            fileRef = "UI/CoverArtView.h";
+            lastKnownFileType = sourcecode.c.h;
+            path = "UI/CoverArtView.h";
+            sourceTree = "<group>";
+        };
+        8D11071A0486CEB800E47090 /* CoverArtView.m */ = {
+            isa = PBXFileReference;
+            fileRef = "UI/CoverArtView.m";
+            lastKnownFileType = sourcecode.c.objc;
+            path = "UI/CoverArtView.m";
+            sourceTree = "<group>";
+        };
+
+        8D11071B0486CEB800E47090 /* Info.plist */ = {
+            isa = PBXFileReference;
+            fileRef = "Project/Info.plist";
+            lastKnownFileType = text.plist.xml;
+            path = "Project/Info.plist";
+            sourceTree = "<group>";
+        };
+        8D11071C0486CEB800E47090 /* MainMenu.xib */ = {
+            isa = PBXFileReference;
+            fileRef = "Project/MainMenu.xib";
+            lastKnownFileType = file.xib;
+            path = "Project/MainMenu.xib";
+            sourceTree = "<group>";
+        };
+        8D11071D0486CEB800E47090 /* build.sh */ = {
+            isa = PBXFileReference;
+            fileRef = "Project/build.sh";
+            path = "Project/build.sh";
+            sourceTree = "<group>";
+        };
+
+        8D11071E0486CEB800E47090 /* PowerPlay.icns */ = {
+            isa = PBXFileReference;
+            fileRef = "Resources/Images/PowerPlay.icns";
+            path = "Resources/Images/PowerPlay.icns";
+            sourceTree = "<group>";
+        };
+
+        8D1107300486CEB800E47090 /* AirPlayReceiverAppDelegate.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */;
+        };
+        8D1107310486CEB800E47090 /* GrowlNotifier.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11070F0486CEB800E47090 /* GrowlNotifier.m */;
+        };
+        8D1107320486CEB800E47090 /* main.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107100486CEB800E47090 /* main.m */;
+        };
+        8D1107330486CEB800E47090 /* ALACDecoder.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107120486CEB800E47090 /* ALACDecoder.m */;
+        };
+        8D1107340486CEB800E47090 /* CoreAudioPlayer.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107140486CEB800E47090 /* CoreAudioPlayer.m */;
+        };
+        8D1107350486CEB800E47090 /* RAOPReceiver.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107160486CEB800E47090 /* RAOPReceiver.m */;
+        };
+        8D1107360486CEB800E47090 /* AirPlayMetadataParser.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D1107180486CEB800E47090 /* AirPlayMetadataParser.m */;
+        };
+        8D1107370486CEB800E47090 /* CoverArtView.m in Sources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11071A0486CEB800E47090 /* CoverArtView.m */;
+        };
+
+        8D1107380486CEB800E47090 /* Cocoa.framework in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11073A0486CEB800E47090 /* Cocoa.framework */;
+        };
+        8D1107390486CEB800E47090 /* CoreAudio.framework in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11073B0486CEB800E47090 /* CoreAudio.framework */;
+        };
+        8D11073A0486CEB800E47090 /* AudioToolbox.framework in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11073C0486CEB800E47090 /* AudioToolbox.framework */;
+        };
+
+        8D11073B0486CEB800E47090 /* Info.plist in Resources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11071B0486CEB800E47090 /* Info.plist */;
+        };
+        8D11073C0486CEB800E47090 /* MainMenu.xib in Resources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11071C0486CEB800E47090 /* MainMenu.xib */;
+        };
+        8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11071E0486CEB800E47090 /* PowerPlay.icns */;
+        };
+
+        8D11073A0486CEB800E47090 /* Cocoa.framework */ = {
+            isa = PBXFileReference;
+            name = Cocoa.framework;
+            path = "/System/Library/Frameworks/Cocoa.framework";
+            sourceTree = SDKROOT;
+        };
+        8D11073B0486CEB800E47090 /* CoreAudio.framework */ = {
+            isa = PBXFileReference;
+            name = CoreAudio.framework;
+            path = "/System/Library/Frameworks/CoreAudio.framework";
+            sourceTree = SDKROOT;
+        };
+        8D11073C0486CEB800E47090 /* AudioToolbox.framework */ = {
+            isa = PBXFileReference;
+            name = AudioToolbox.framework;
+            path = "/System/Library/Frameworks/AudioToolbox.framework";
+            sourceTree = SDKROOT;
+        };
+    };
+    rootObject = 29B97313FDCFA39411CA2CEA;
+}
