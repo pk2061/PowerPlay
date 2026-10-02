@@ -1,4 +1,0 @@
-Placeholder ICNS resource
-This file is intentionally a text placeholder because a binary .icns cannot be generated in this environment.
-
-For a real Tiger build, replace this file with a valid ICNS bundle generated in Xcode or iconutil.
