@@ -3,17 +3,16 @@
     archiveVersion = 1;
     classes = {
     };
-    objectVersion = 46;
+    objectVersion = 42;
     objects = {
 
         08FB7793FE84155DC02AAC07 /* Project object */ = {
             isa = PBXProject;
             attributes = {
-                LastUpgradeCheck = 1540;
-                ORGANIZATIONNAME = "Tiger AirPlay Receiver";
+                ORGANIZATIONNAME = "PowerPlay";
             };
             buildConfigurationList = 08FB7794FE84155DC02AAC07 /* Build configuration list for PBXProject */;
-            compatibilityVersion = "Xcode 9.3";
+            compatibilityVersion = "Xcode 2.5";
             developmentRegion = en;
             hasScannedForEncodings = 1;
             knownRegions = (
