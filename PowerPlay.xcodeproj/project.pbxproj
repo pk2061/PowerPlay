@@ -11,7 +11,7 @@
             attributes = {
                 ORGANIZATIONNAME = "PowerPlay";
             };
-            buildConfigurationList = 29B97315FDCFA39411CA2CEA /* Build configuration list for PBXProject */;
+            buildConfigurationList = 29B97320FDCFA39411CA2CEA /* Build configuration list for PBXProject */;
             compatibilityVersion = "Xcode 2.5";
             mainGroup = 29B97314FDCFA39411CA2CEA;
             projectDirPath = "";
@@ -31,7 +31,7 @@
                 29B97319FDCFA39411CA2CEA /* UI */,
                 29B9731AFDCFA39411CA2CEA /* Project */,
                 29B9731BFDCFA39411CA2CEA /* Resources */,
-                8D11071E0486CEB800E47090 /* Products */,
+                8D1107440486CEB800E47090 /* Products */,
             );
             sourceTree = "<group>";
         };
@@ -111,7 +111,7 @@
             sourceTree = "<group>";
         };
 
-        8D11071E0486CEB800E47090 /* Products */ = {
+        8D1107440486CEB800E47090 /* Products */ = {
             isa = PBXGroup;
             children = (
                 8D11072F0486CEB800E47090 /* PowerPlay.app */,
@@ -167,7 +167,7 @@
             files = (
                 8D1107380486CEB800E47090 /* Cocoa.framework in Frameworks */,
                 8D1107390486CEB800E47090 /* CoreAudio.framework in Frameworks */,
-                8D11073A0486CEB800E47090 /* AudioToolbox.framework in Frameworks */,
+                8D1107400486CEB800E47090 /* AudioToolbox.framework in Frameworks */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
@@ -176,8 +176,8 @@
             isa = PBXResourcesBuildPhase;
             buildActionMask = 2147483647;
             files = (
-                8D11073B0486CEB800E47090 /* Info.plist in Resources */,
-                8D11073C0486CEB800E47090 /* MainMenu.xib in Resources */,
+                8D1107410486CEB800E47090 /* Info.plist in Resources */,
+                8D1107420486CEB800E47090 /* MainMenu.xib in Resources */,
                 8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
@@ -249,7 +249,7 @@
             name = Release;
         };
 
-        29B97315FDCFA39411CA2CEA /* Build configuration list for PBXProject */ = {
+        29B97320FDCFA39411CA2CEA /* Build configuration list for PBXProject */ = {
             isa = XCConfigurationList;
             defaultConfigurationIsVisible = 0;
             defaultConfigurationName = Release;
@@ -438,16 +438,16 @@
             isa = PBXBuildFile;
             fileRef = 8D11073B0486CEB800E47090 /* CoreAudio.framework */;
         };
-        8D11073A0486CEB800E47090 /* AudioToolbox.framework in Frameworks */ = {
+        8D1107400486CEB800E47090 /* AudioToolbox.framework in Frameworks */ = {
             isa = PBXBuildFile;
             fileRef = 8D11073C0486CEB800E47090 /* AudioToolbox.framework */;
         };
 
-        8D11073B0486CEB800E47090 /* Info.plist in Resources */ = {
+        8D1107410486CEB800E47090 /* Info.plist in Resources */ = {
             isa = PBXBuildFile;
             fileRef = 8D11071B0486CEB800E47090 /* Info.plist */;
         };
-        8D11073C0486CEB800E47090 /* MainMenu.xib in Resources */ = {
+        8D1107420486CEB800E47090 /* MainMenu.xib in Resources */ = {
             isa = PBXBuildFile;
             fileRef = 8D11071C0486CEB800E47090 /* MainMenu.xib */;
         };
