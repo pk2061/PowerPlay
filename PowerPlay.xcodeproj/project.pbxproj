@@ -261,139 +261,120 @@
 
         8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */ = {
             isa = PBXFileReference;
-            fileRef = "App/AirPlayReceiverAppDelegate.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "App/AirPlayReceiverAppDelegate.h";
+            path = AirPlayReceiverAppDelegate.h;
             sourceTree = "<group>";
         };
         8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */ = {
             isa = PBXFileReference;
-            fileRef = "App/AirPlayReceiverAppDelegate.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "App/AirPlayReceiverAppDelegate.m";
+            path = AirPlayReceiverAppDelegate.m;
             sourceTree = "<group>";
         };
         8D11070E0486CEB800E47090 /* GrowlNotifier.h */ = {
             isa = PBXFileReference;
-            fileRef = "App/GrowlNotifier.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "App/GrowlNotifier.h";
+            path = GrowlNotifier.h;
             sourceTree = "<group>";
         };
         8D11070F0486CEB800E47090 /* GrowlNotifier.m */ = {
             isa = PBXFileReference;
-            fileRef = "App/GrowlNotifier.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "App/GrowlNotifier.m";
+            path = GrowlNotifier.m;
             sourceTree = "<group>";
         };
         8D1107100486CEB800E47090 /* main.m */ = {
             isa = PBXFileReference;
-            fileRef = "App/main.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "App/main.m";
+            path = main.m;
             sourceTree = "<group>";
         };
 
         8D1107110486CEB800E47090 /* ALACDecoder.h */ = {
             isa = PBXFileReference;
-            fileRef = "Audio/ALACDecoder.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "Audio/ALACDecoder.h";
+            path = ALACDecoder.h;
             sourceTree = "<group>";
         };
         8D1107120486CEB800E47090 /* ALACDecoder.m */ = {
             isa = PBXFileReference;
-            fileRef = "Audio/ALACDecoder.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "Audio/ALACDecoder.m";
+            path = ALACDecoder.m;
             sourceTree = "<group>";
         };
         8D1107130486CEB800E47090 /* CoreAudioPlayer.h */ = {
             isa = PBXFileReference;
-            fileRef = "Audio/CoreAudioPlayer.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "Audio/CoreAudioPlayer.h";
+            path = CoreAudioPlayer.h;
             sourceTree = "<group>";
         };
         8D1107140486CEB800E47090 /* CoreAudioPlayer.m */ = {
             isa = PBXFileReference;
-            fileRef = "Audio/CoreAudioPlayer.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "Audio/CoreAudioPlayer.m";
+            path = CoreAudioPlayer.m;
             sourceTree = "<group>";
         };
 
         8D1107150486CEB800E47090 /* RAOPReceiver.h */ = {
             isa = PBXFileReference;
-            fileRef = "Network/RAOPReceiver.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "Network/RAOPReceiver.h";
+            path = RAOPReceiver.h;
             sourceTree = "<group>";
         };
         8D1107160486CEB800E47090 /* RAOPReceiver.m */ = {
             isa = PBXFileReference;
-            fileRef = "Network/RAOPReceiver.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "Network/RAOPReceiver.m";
+            path = RAOPReceiver.m;
             sourceTree = "<group>";
         };
 
         8D1107170486CEB800E47090 /* AirPlayMetadataParser.h */ = {
             isa = PBXFileReference;
-            fileRef = "Metadata/AirPlayMetadataParser.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "Metadata/AirPlayMetadataParser.h";
+            path = AirPlayMetadataParser.h;
             sourceTree = "<group>";
         };
         8D1107180486CEB800E47090 /* AirPlayMetadataParser.m */ = {
             isa = PBXFileReference;
-            fileRef = "Metadata/AirPlayMetadataParser.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "Metadata/AirPlayMetadataParser.m";
+            path = AirPlayMetadataParser.m;
             sourceTree = "<group>";
         };
 
         8D1107190486CEB800E47090 /* CoverArtView.h */ = {
             isa = PBXFileReference;
-            fileRef = "UI/CoverArtView.h";
             lastKnownFileType = sourcecode.c.h;
-            path = "UI/CoverArtView.h";
+            path = CoverArtView.h;
             sourceTree = "<group>";
         };
         8D11071A0486CEB800E47090 /* CoverArtView.m */ = {
             isa = PBXFileReference;
-            fileRef = "UI/CoverArtView.m";
             lastKnownFileType = sourcecode.c.objc;
-            path = "UI/CoverArtView.m";
+            path = CoverArtView.m;
             sourceTree = "<group>";
         };
 
         8D11071B0486CEB800E47090 /* Info.plist */ = {
             isa = PBXFileReference;
-            fileRef = "Project/Info.plist";
             lastKnownFileType = text.plist.xml;
-            path = "Project/Info.plist";
+            path = Info.plist;
             sourceTree = "<group>";
         };
         8D11071C0486CEB800E47090 /* MainMenu.xib */ = {
             isa = PBXFileReference;
-            fileRef = "Project/MainMenu.xib";
             lastKnownFileType = file.xib;
-            path = "Project/MainMenu.xib";
+            path = MainMenu.xib;
             sourceTree = "<group>";
         };
         8D11071D0486CEB800E47090 /* build.sh */ = {
             isa = PBXFileReference;
-            fileRef = "Project/build.sh";
-            path = "Project/build.sh";
+            path = build.sh;
             sourceTree = "<group>";
         };
 
         8D11071E0486CEB800E47090 /* PowerPlay.icns */ = {
             isa = PBXFileReference;
-            fileRef = "Resources/Images/PowerPlay.icns";
-            path = "Resources/Images/PowerPlay.icns";
+            path = PowerPlay.icns;
             sourceTree = "<group>";
         };
 
