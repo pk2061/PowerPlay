@@ -40,7 +40,7 @@
         0A0B0C1D220D4D2E9F9F1D50 /* Products */ = {
             isa = PBXGroup;
             children = (
-                08FB7796FE84155DC02AAC07 /* AirPlayReceiver.app */,
+                08FB7796FE84155DC02AAC07 /* PowerPlay.app */,
             );
             sourceTree = "<group>";
         };
@@ -121,9 +121,9 @@
             sourceTree = "<group>";
         };
 
-        08FB7795FE84155DC02AAC07 /* AirPlayReceiver */ = {
+        08FB7795FE84155DC02AAC07 /* PowerPlay */ = {
             isa = PBXNativeTarget;
-            buildConfigurationList = 08FB7796FE84155DC02AAC07 /* Build configuration list for PBXNativeTarget "AirPlayReceiver" */;
+            buildConfigurationList = 08FB7796FE84155DC02AAC07 /* Build configuration list for PBXNativeTarget "PowerPlay" */;
             buildPhases = (
                 08FB7797FE84155DC02AAC07 /* Sources */,
                 08FB7798FE84155DC02AAC07 /* Frameworks */,
@@ -134,17 +134,17 @@
             );
             dependencies = (
             );
-            name = AirPlayReceiver;
-            productName = AirPlayReceiver;
-            productReference = 08FB7796FE84155DC02AAC07 /* AirPlayReceiver.app */;
+            name = PowerPlay;
+            productName = PowerPlay;
+            productReference = 08FB7796FE84155DC02AAC07 /* PowerPlay.app */;
             productType = "com.apple.product-type.application";
         };
 
-        08FB7796FE84155DC02AAC07 /* AirPlayReceiver.app */ = {
+        08FB7796FE84155DC02AAC07 /* PowerPlay.app */ = {
             isa = PBXFileReference;
             explicitFileType = wrapper.application;
             includeInIndex = 0;
-            path = AirPlayReceiver.app;
+            path = PowerPlay.app;
             sourceTree = BUILT_PRODUCTS_DIR;
         };
 
@@ -197,7 +197,7 @@
             runOnlyForDeploymentPostprocessing = 0;
         };
 
-        08FB7796FE84155DC02AAC07 /* Build configuration list for PBXNativeTarget "AirPlayReceiver" */ = {
+        08FB7796FE84155DC02AAC07 /* Build configuration list for PBXNativeTarget "PowerPlay" */ = {
             isa = XCConfigurationList;
             defaultConfigurationIsVisible = 0;
             defaultConfigurationName = Release;
