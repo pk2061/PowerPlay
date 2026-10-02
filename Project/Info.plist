@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>AirPlayReceiver</string>
+    <string>PowerPlay</string>
     <key>CFBundleExecutable</key>
-    <string>AirPlayReceiver</string>
+    <string>PowerPlay</string>
     <key>CFBundleIconFile</key>
     <string>PowerPlay.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.example.AirPlayReceiver</string>
+    <string>com.pk2061.PowerPlay</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>AirPlayReceiver</string>
+    <string>PowerPlay</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

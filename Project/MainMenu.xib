@@ -7,10 +7,10 @@
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="NSApplication"/>
         <customObject id="-1" userLabel="Application" customClass="NSObject"/>
-        <customObject id="9" userLabel="AirPlayReceiverAppDelegate" customClass="AirPlayReceiverAppDelegate"/>
+        <customObject id="9" userLabel="PowerPlayAppDelegate" customClass="AirPlayReceiverAppDelegate"/>
         <menu title="MainMenu" systemMenu="yes" autoenablesItems="NO" id="29">
             <items>
-                <menuItem title="AirPlayReceiver" id="57">
+                <menuItem title="PowerPlay" id="57">
                     <menu keyEquivalent=""/>
                 </menuItem>
             </items>
