@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>AirPlayReceiver</string>
     <key>CFBundleIconFile</key>
-    <string>AirPlayReceiver.icns</string>
+    <string>PowerPlay.icns</string>
     <key>CFBundleIdentifier</key>
     <string>com.example.AirPlayReceiver</string>
     <key>CFBundleInfoDictionaryVersion</key>
