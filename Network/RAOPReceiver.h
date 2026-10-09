@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <Foundation/NSNetServices.h>
 #import <CoreServices/CoreServices.h>
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
