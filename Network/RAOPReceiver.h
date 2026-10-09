@@ -1,5 +1,12 @@
 #import <Foundation/Foundation.h>
-#import <Foundation/NSNetServices.h>
+
+#if defined(__OBJC__)
+@class NSNetService;
+@class NSNetServiceBrowser;
+@protocol NSNetServiceBrowserDelegate;
+@protocol NSNetServiceDelegate;
+#endif
+
 #import <CoreServices/CoreServices.h>
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
