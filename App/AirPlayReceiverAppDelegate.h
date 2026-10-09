@@ -4,7 +4,11 @@
 
 @class CoverArtView;
 
-@interface AirPlayReceiverAppDelegate : NSObject <NSApplicationDelegate> {
+#if defined(__OBJC__)
+@protocol NSApplicationDelegate;
+#endif
+
+@interface AirPlayReceiverAppDelegate : NSObject {
     NSWindow *window;
     NSButton *playPauseButton;
     NSButton *nextButton;

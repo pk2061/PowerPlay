@@ -115,9 +115,12 @@
     } else {
         NSImage *placeholder = [[NSImage alloc] initWithSize:NSMakeSize(180, 180)];
         [placeholder lockFocus];
-        NSGradient *gradient = [[[NSGradient alloc] initWithStartingColor:[NSColor colorWithCalibratedRed:0.88 green:0.88 blue:0.90 alpha:1.0]
-                                                          endingColor:[NSColor colorWithCalibratedRed:0.74 green:0.76 blue:0.80 alpha:1.0]] autorelease];
-        [gradient drawInRect:NSMakeRect(0, 0, 180, 180) angle:90.0];
+        NSColor *light = [NSColor colorWithCalibratedRed:0.88 green:0.88 blue:0.90 alpha:1.0];
+        NSColor *dark = [NSColor colorWithCalibratedRed:0.74 green:0.76 blue:0.80 alpha:1.0];
+        [light set];
+        NSRectFill(NSMakeRect(0, 0, 180, 180));
+        [dark set];
+        NSRectFill(NSMakeRect(0, 0, 180, 10));
         [[NSColor darkGrayColor] set];
         NSFrameRect(NSMakeRect(0, 0, 180, 180));
         [placeholder unlockFocus];
