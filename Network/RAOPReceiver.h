@@ -1,10 +1,21 @@
 #import <Foundation/Foundation.h>
+#import <Foundation/NSNetServices.h>
 
 #if defined(__OBJC__)
 @class NSNetService;
 @class NSNetServiceBrowser;
 @protocol NSNetServiceBrowserDelegate;
 @protocol NSNetServiceDelegate;
+#endif
+
+#ifndef NSINTEGER_DEFINED
+typedef long NSInteger;
+#define NSINTEGER_DEFINED 1
+#endif
+
+#ifndef NSUINTEGER_DEFINED
+typedef unsigned long NSUInteger;
+#define NSUINTEGER_DEFINED 1
 #endif
 
 #import <CoreServices/CoreServices.h>
