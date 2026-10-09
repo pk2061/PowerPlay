@@ -1,4 +1,5 @@
-#import <Cocoa/Cocoa.h>
+#import <Foundation/Foundation.h>
+#import <CoreServices/CoreServices.h>
 #import <CoreAudio/CoreAudio.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import "ALACDecoder.h"
