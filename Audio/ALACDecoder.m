@@ -1,3 +1,4 @@
+#import <Foundation/Foundation.h>
 #import "ALACDecoder.h"
 
 @implementation ALACDecoder
@@ -59,21 +60,21 @@
     }
 
     const unsigned char *bytes = [packetData bytes];
-    NSUInteger totalLength = [packetData length];
+    unsigned long totalLength = [packetData length];
     if (totalLength < 8) {
         return NO;
     }
 
-    NSUInteger frameLength = ((NSUInteger)bytes[0] << 24) |
-                             ((NSUInteger)bytes[1] << 16) |
-                             ((NSUInteger)bytes[2] << 8) |
-                             (NSUInteger)bytes[3];
+    unsigned long frameLength = ((unsigned long)bytes[0] << 24) |
+                                ((unsigned long)bytes[1] << 16) |
+                                ((unsigned long)bytes[2] << 8) |
+                                (unsigned long)bytes[3];
     if (frameLength == 0 || frameLength + 4 != totalLength) {
         return NO;
     }
 
-    NSUInteger descriptor = ((NSUInteger)bytes[4] << 8) | (NSUInteger)bytes[5];
-    NSUInteger channels = 2;
+    unsigned long descriptor = ((unsigned long)bytes[4] << 8) | (unsigned long)bytes[5];
+    unsigned long channels = 2;
     if (descriptor != 0) {
         channels = (descriptor & 0x0F) + 1;
     }
@@ -81,7 +82,7 @@
         return NO;
     }
 
-    NSUInteger sampleCount = ((NSUInteger)bytes[6] << 8) | (NSUInteger)bytes[7];
+    unsigned long sampleCount = ((unsigned long)bytes[6] << 8) | (unsigned long)bytes[7];
     if (sampleCount == 0) {
         sampleCount = frameLength / (2 * channels);
     }
@@ -99,18 +100,18 @@
     }
 
     const unsigned char *bytes = [frameData bytes];
-    NSUInteger totalLength = [frameData length];
-    NSUInteger headerLength = 0;
-    NSUInteger frameLength = totalLength;
-    NSUInteger descriptor = 0;
-    NSUInteger sampleCountHint = 0;
+    unsigned long totalLength = [frameData length];
+    unsigned long headerLength = 0;
+    unsigned long frameLength = totalLength;
+    unsigned long descriptor = 0;
+    unsigned long sampleCountHint = 0;
 
     if (totalLength >= 4) {
         headerLength = 4;
-        frameLength = ((NSUInteger)bytes[0] << 24) |
-                      ((NSUInteger)bytes[1] << 16) |
-                      ((NSUInteger)bytes[2] << 8) |
-                      (NSUInteger)bytes[3];
+        frameLength = ((unsigned long)bytes[0] << 24) |
+                      ((unsigned long)bytes[1] << 16) |
+                      ((unsigned long)bytes[2] << 8) |
+                      (unsigned long)bytes[3];
         if (frameLength == 0 || frameLength + headerLength > totalLength) {
             frameLength = totalLength - headerLength;
             if (frameLength == 0) {
@@ -120,14 +121,14 @@
     }
 
     if (totalLength >= 8) {
-        descriptor = ((NSUInteger)bytes[4] << 8) | (NSUInteger)bytes[5];
-        sampleCountHint = ((NSUInteger)bytes[6] << 8) | (NSUInteger)bytes[7];
+        descriptor = ((unsigned long)bytes[4] << 8) | (unsigned long)bytes[5];
+        sampleCountHint = ((unsigned long)bytes[6] << 8) | (unsigned long)bytes[7];
     }
 
-    NSUInteger framePayloadLength = (totalLength > headerLength) ? (totalLength - headerLength) : 0;
-    NSUInteger channels = 2;
-    NSUInteger bitsPerSample = 16;
-    NSUInteger samplesPerFrame = 512;
+    unsigned long framePayloadLength = (totalLength > headerLength) ? (totalLength - headerLength) : 0;
+    unsigned long channels = 2;
+    unsigned long bitsPerSample = 16;
+    unsigned long samplesPerFrame = 512;
 
     if (descriptor != 0) {
         channels = (descriptor & 0x0F) + 1;
@@ -177,12 +178,12 @@
 
     [pendingFrameData appendData:packetData];
     const unsigned char *bytes = [pendingFrameData bytes];
-    NSUInteger frameLength = ((NSUInteger)bytes[0] << 24) |
-                             ((NSUInteger)bytes[1] << 16) |
-                             ((NSUInteger)bytes[2] << 8) |
-                             (NSUInteger)bytes[3];
-    NSUInteger totalLength = [pendingFrameData length];
-    NSUInteger expectedLength = 4 + frameLength;
+    unsigned long frameLength = ((unsigned long)bytes[0] << 24) |
+                                ((unsigned long)bytes[1] << 16) |
+                                ((unsigned long)bytes[2] << 8) |
+                                (unsigned long)bytes[3];
+    unsigned long totalLength = [pendingFrameData length];
+    unsigned long expectedLength = 4 + frameLength;
 
     if (frameLength == 0 || expectedLength != totalLength) {
         [pendingFrameData setLength:0];
@@ -213,10 +214,10 @@
     }
 
     NSDictionary *frameInfo = [self parseFrameHeader:completeFrame];
-    NSUInteger headerLength = [[frameInfo objectForKey:@"headerLength"] unsignedLongValue];
-    NSUInteger payloadLength = [[frameInfo objectForKey:@"payloadLength"] unsignedLongValue];
-    NSUInteger channels = [[frameInfo objectForKey:@"channels"] unsignedLongValue];
-    NSUInteger samplesPerFrame = [[frameInfo objectForKey:@"samplesPerFrame"] unsignedLongValue];
+    unsigned long headerLength = [[frameInfo objectForKey:@"headerLength"] unsignedLongValue];
+    unsigned long payloadLength = [[frameInfo objectForKey:@"payloadLength"] unsignedLongValue];
+    unsigned long channels = [[frameInfo objectForKey:@"channels"] unsignedLongValue];
+    unsigned long samplesPerFrame = [[frameInfo objectForKey:@"samplesPerFrame"] unsignedLongValue];
     if (channels == 0) {
         channels = 2;
     }
@@ -228,7 +229,7 @@
         return nil;
     }
 
-    NSUInteger totalSamples = samplesPerFrame * channels;
+    unsigned long totalSamples = samplesPerFrame * channels;
     if (totalSamples == 0) {
         totalSamples = payloadLength / (2 * channels);
     }
@@ -237,7 +238,7 @@
     }
 
     const unsigned char *bytes = [completeFrame bytes];
-    NSUInteger bodyLength = [completeFrame length] - headerLength;
+    unsigned long bodyLength = [completeFrame length] - headerLength;
     if (bodyLength == 0) {
         NSMutableData *pcmData = [NSMutableData dataWithLength:totalSamples * 2];
         if (pcmData == nil) {
@@ -255,11 +256,11 @@
 
     int32_t previousSample[8] = {0};
     uint16_t *samples = (uint16_t *)[pcmData mutableBytes];
-    NSUInteger payloadOffset = headerLength;
-    NSUInteger sampleIndex = 0;
+    unsigned long payloadOffset = headerLength;
+    unsigned long sampleIndex = 0;
 
     while (payloadOffset + 1 < [completeFrame length] && sampleIndex < totalSamples) {
-        NSUInteger channelIndex = sampleIndex % channels;
+        unsigned long channelIndex = sampleIndex % channels;
         if (channelIndex >= 8) {
             channelIndex = 7;
         }
@@ -280,7 +281,7 @@
     }
 
     while (sampleIndex < totalSamples) {
-        NSUInteger channelIndex = sampleIndex % channels;
+        unsigned long channelIndex = sampleIndex % channels;
         if (channelIndex >= 8) {
             channelIndex = 7;
         }
