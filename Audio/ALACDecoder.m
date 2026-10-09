@@ -1,15 +1,5 @@
 #import "ALACDecoder.h"
 
-#ifndef NSINTEGER_DEFINED
-typedef unsigned long NSUInteger;
-#define NSINTEGER_DEFINED 1
-#endif
-
-#ifndef NSUINTEGER_DEFINED
-typedef unsigned long NSUInteger;
-#define NSUINTEGER_DEFINED 1
-#endif
-
 @implementation ALACDecoder
 
 - (id)init {
