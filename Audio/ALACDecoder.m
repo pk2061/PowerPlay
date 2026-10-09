@@ -1,5 +1,15 @@
 #import "ALACDecoder.h"
 
+#ifndef NSINTEGER_DEFINED
+typedef unsigned long NSUInteger;
+#define NSINTEGER_DEFINED 1
+#endif
+
+#ifndef NSUINTEGER_DEFINED
+typedef unsigned long NSUInteger;
+#define NSUINTEGER_DEFINED 1
+#endif
+
 @implementation ALACDecoder
 
 - (id)init {
@@ -150,12 +160,12 @@
         frameLength = totalLength;
     }
 
-    [info setObject:[NSNumber numberWithUnsignedInteger:headerLength] forKey:@"headerLength"];
-    [info setObject:[NSNumber numberWithUnsignedInteger:frameLength] forKey:@"frameLength"];
-    [info setObject:[NSNumber numberWithUnsignedInteger:framePayloadLength] forKey:@"payloadLength"];
-    [info setObject:[NSNumber numberWithUnsignedInteger:channels] forKey:@"channels"];
-    [info setObject:[NSNumber numberWithUnsignedInteger:bitsPerSample] forKey:@"bitsPerSample"];
-    [info setObject:[NSNumber numberWithUnsignedInteger:samplesPerFrame] forKey:@"samplesPerFrame"];
+    [info setObject:[NSNumber numberWithUnsignedLong:headerLength] forKey:@"headerLength"];
+    [info setObject:[NSNumber numberWithUnsignedLong:frameLength] forKey:@"frameLength"];
+    [info setObject:[NSNumber numberWithUnsignedLong:framePayloadLength] forKey:@"payloadLength"];
+    [info setObject:[NSNumber numberWithUnsignedLong:channels] forKey:@"channels"];
+    [info setObject:[NSNumber numberWithUnsignedLong:bitsPerSample] forKey:@"bitsPerSample"];
+    [info setObject:[NSNumber numberWithUnsignedLong:samplesPerFrame] forKey:@"samplesPerFrame"];
 
     [lastFrameInfo release];
     lastFrameInfo = [info copy];
@@ -213,10 +223,10 @@
     }
 
     NSDictionary *frameInfo = [self parseFrameHeader:completeFrame];
-    NSUInteger headerLength = [[frameInfo objectForKey:@"headerLength"] unsignedIntegerValue];
-    NSUInteger payloadLength = [[frameInfo objectForKey:@"payloadLength"] unsignedIntegerValue];
-    NSUInteger channels = [[frameInfo objectForKey:@"channels"] unsignedIntegerValue];
-    NSUInteger samplesPerFrame = [[frameInfo objectForKey:@"samplesPerFrame"] unsignedIntegerValue];
+    NSUInteger headerLength = [[frameInfo objectForKey:@"headerLength"] unsignedLongValue];
+    NSUInteger payloadLength = [[frameInfo objectForKey:@"payloadLength"] unsignedLongValue];
+    NSUInteger channels = [[frameInfo objectForKey:@"channels"] unsignedLongValue];
+    NSUInteger samplesPerFrame = [[frameInfo objectForKey:@"samplesPerFrame"] unsignedLongValue];
     if (channels == 0) {
         channels = 2;
     }
