@@ -47,7 +47,7 @@
         format.mFramesPerPacket = 1;
         format.mBytesPerFrame = 4;
 
-        audioPlayer = [[CoreAudioPlayer alloc] initWithFormat:format];
+        audioPlayer = [[CoreAudioPlayer alloc] initWithFormat:&format];
         serviceBrowser = [[NSNetServiceBrowser alloc] init];
         [serviceBrowser setDelegate:self];
     }
@@ -223,11 +223,11 @@
     [self sendRTSPCommand:@"ANNOUNCE" path:@"/" headers:announceHeaders body:announceBody];
 
     if ([self openUDPListenerOnPort:audioPort socket:&audioSocket]) {
-        [metadata setObject:[NSNumber numberWithInteger:audioPort] forKey:@"audio_port"];
+        [metadata setObject:[NSNumber numberWithInt:(int)audioPort] forKey:@"audio_port"];
     }
 
     if ([self openUDPListenerOnPort:timingPort socket:&timingSocket]) {
-        [metadata setObject:[NSNumber numberWithInteger:timingPort] forKey:@"timing_port"];
+        [metadata setObject:[NSNumber numberWithInt:(int)timingPort] forKey:@"timing_port"];
     }
 
     [self setupRTPStreams];
@@ -328,20 +328,20 @@
             NSArray *ports = [value componentsSeparatedByString:@"-"];
             if ([ports count] > 0) {
                 NSString *firstPortString = [[ports objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                NSInteger portValue = [firstPortString integerValue];
+                NSInteger portValue = [firstPortString intValue];
                 if (portValue > 0) {
                     audioPort = portValue;
                     foundAnyPort = YES;
                 }
             }
         } else if ([key isEqualToString:@"control_port"]) {
-            NSInteger portValue = [value integerValue];
+            NSInteger portValue = [value intValue];
             if (portValue > 0) {
                 controlPort = portValue;
                 foundAnyPort = YES;
             }
         } else if ([key isEqualToString:@"timing_port"]) {
-            NSInteger portValue = [value integerValue];
+            NSInteger portValue = [value intValue];
             if (portValue > 0) {
                 timingPort = portValue;
                 foundAnyPort = YES;
@@ -358,7 +358,7 @@
                 tail = [tail substringToIndex:comma.location];
             }
             NSString *firstPort = [[tail componentsSeparatedByString:@"-"] objectAtIndex:0];
-            NSInteger serverPort = [firstPort integerValue];
+            NSInteger serverPort = [firstPort intValue];
             if (serverPort > 0) {
                 audioPort = serverPort;
                 foundAnyPort = YES;
@@ -374,7 +374,7 @@
             if (comma.location != NSNotFound) {
                 tail = [tail substringToIndex:comma.location];
             }
-            NSInteger controlPortValue = [tail integerValue];
+            NSInteger controlPortValue = [tail intValue];
             if (controlPortValue > 0) {
                 controlPort = controlPortValue;
                 foundAnyPort = YES;
@@ -668,7 +668,7 @@
         [result setObject:statusLine forKey:@"statusLine"];
     }
 
-    NSArray *lines = [traceString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+    NSArray *lines = [traceString componentsSeparatedByString:@"\n"];
     NSUInteger i;
     for (i = 0; i < [lines count]; i++) {
         NSString *line = [[lines objectAtIndex:i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];

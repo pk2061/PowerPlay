@@ -52,10 +52,14 @@ static OSStatus AUOutputCallback(void *inRefCon,
     return noErr;
 }
 
-- (id)initWithFormat:(AudioStreamBasicDescription)format {
+- (id)initWithFormat:(AudioStreamBasicDescription *)format {
     self = [super init];
     if (self != nil) {
-        streamFormat = format;
+        if (format == NULL) {
+            [self release];
+            return nil;
+        }
+        streamFormat = *format;
         outputUnit = NULL;
         isPlaying = NO;
         queuedAudio = [[NSMutableData alloc] init];

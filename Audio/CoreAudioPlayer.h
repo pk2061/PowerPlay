@@ -11,7 +11,7 @@
     NSMutableData *queuedAudio;
 }
 
-- (id)initWithFormat:(AudioStreamBasicDescription)format;
+- (id)initWithFormat:(AudioStreamBasicDescription *)format;
 - (OSStatus)renderAudioToBufferList:(AudioBufferList *)bufferList frames:(UInt32)frameCount;
 - (void)start;
 - (void)stop;
