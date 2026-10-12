@@ -308,7 +308,8 @@
 
     BOOL foundAnyPort = NO;
     NSArray *parts = [transportHeader componentsSeparatedByString:@";"];
-    for (NSUInteger i = 0; i < [parts count]; i++) {
+    NSUInteger i;
+    for (i = 0; i < [parts count]; i++) {
         NSString *part = [[parts objectAtIndex:i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if ([part length] == 0) {
             continue;
@@ -668,7 +669,8 @@
     }
 
     NSArray *lines = [traceString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-    for (NSUInteger i = 0; i < [lines count]; i++) {
+    NSUInteger i;
+    for (i = 0; i < [lines count]; i++) {
         NSString *line = [[lines objectAtIndex:i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if ([line length] == 0) {
             continue;
@@ -790,7 +792,8 @@
 
     if (sequenceNumber == 0 && timestamp == 0) {
         BOOL hasNonZeroPayload = NO;
-        for (NSUInteger i = 12; i < [packet length]; i++) {
+        NSUInteger i;
+        for (i = 12; i < [packet length]; i++) {
             if (((const unsigned char *)[packet bytes])[i] != 0) {
                 hasNonZeroPayload = YES;
                 break;

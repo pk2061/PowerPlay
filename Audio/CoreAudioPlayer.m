@@ -27,8 +27,9 @@ static OSStatus AUOutputCallback(void *inRefCon,
     UInt32 bytesAvailable = (UInt32)[queuedAudio length];
     UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
     const void *queuedBytes = [queuedAudio bytes];
+    UInt32 i;
 
-    for (UInt32 i = 0; i < bufferList->mNumberBuffers; i++) {
+    for (i = 0; i < bufferList->mNumberBuffers; i++) {
         AudioBuffer *buffer = &bufferList->mBuffers[i];
         UInt32 copyLength = (i == 0) ? bytesToCopy : 0;
         if (buffer->mData != NULL) {

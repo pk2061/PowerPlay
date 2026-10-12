@@ -47,7 +47,8 @@
                 continue;
             }
             int val = -1;
-            for (int j = 0; j < 64; j++) {
+            int j;
+            for (j = 0; j < 64; j++) {
                 if (alphabet[j] == ch) {
                     val = j;
                     break;
@@ -102,7 +103,8 @@
     NSString *lower = [key lowercaseString];
     NSArray *charactersToRemove = [NSArray arrayWithObjects:@" ", @"-", @"_", @".", @"/", nil];
     NSString *normalized = lower;
-    for (NSUInteger i = 0; i < [charactersToRemove count]; i++) {
+    NSUInteger i;
+    for (i = 0; i < [charactersToRemove count]; i++) {
         NSString *remove = [charactersToRemove objectAtIndex:i];
         normalized = [normalized stringByReplacingOccurrencesOfString:remove withString:@""];
     }
@@ -181,7 +183,8 @@
 
     if ([object isKindOfClass:[NSArray class]]) {
         NSArray *items = (NSArray *)object;
-        for (NSUInteger i = 0; i < [items count]; i++) {
+        NSUInteger i;
+        for (i = 0; i < [items count]; i++) {
             NSData *candidate = [self artworkDataFromObject:[items objectAtIndex:i]];
             if (candidate != nil && [candidate length] > 0) {
                 return candidate;
@@ -192,7 +195,8 @@
     if ([object isKindOfClass:[NSDictionary class]]) {
         NSDictionary *dict = (NSDictionary *)object;
         NSArray *keys = [dict allKeys];
-        for (NSUInteger i = 0; i < [keys count]; i++) {
+        NSUInteger i;
+        for (i = 0; i < [keys count]; i++) {
             id key = [keys objectAtIndex:i];
             id value = [dict objectForKey:key];
             if (key == nil || value == nil) {
@@ -232,7 +236,8 @@
     if ([object isKindOfClass:[NSDictionary class]]) {
         NSDictionary *dict = (NSDictionary *)object;
         NSArray *keys = [dict allKeys];
-        for (NSUInteger i = 0; i < [keys count]; i++) {
+        NSUInteger i;
+        for (i = 0; i < [keys count]; i++) {
             id key = [keys objectAtIndex:i];
             id value = [dict objectForKey:key];
             if (key == nil || value == nil) {
@@ -249,7 +254,8 @@
         }
     } else if ([object isKindOfClass:[NSArray class]]) {
         NSArray *items = (NSArray *)object;
-        for (NSUInteger i = 0; i < [items count]; i++) {
+        NSUInteger i;
+        for (i = 0; i < [items count]; i++) {
             [self collectMetadataFromObject:[items objectAtIndex:i] into:result];
         }
     }
@@ -366,7 +372,8 @@
     id value = [dictionary objectForKey:key];
     if (value == nil) {
         NSArray *keys = [dictionary allKeys];
-        for (NSUInteger i = 0; i < [keys count]; i++) {
+        NSUInteger i;
+        for (i = 0; i < [keys count]; i++) {
             id candidateKey = [keys objectAtIndex:i];
             id candidateValue = [dictionary objectForKey:candidateKey];
             if ([candidateValue isKindOfClass:[NSDictionary class]]) {
@@ -396,7 +403,8 @@
     }
 
     NSArray *candidateKeys = [NSArray arrayWithObjects:@"artwork", @"picture", @"coverArt", @"coverart", @"coverArtData", @"albumArt", @"image", @"imagedata", @"data", nil];
-    for (NSUInteger i = 0; i < [candidateKeys count]; i++) {
+    NSUInteger i;
+    for (i = 0; i < [candidateKeys count]; i++) {
         NSString *key = [candidateKeys objectAtIndex:i];
         id artwork = [dictionary objectForKey:key];
 
@@ -406,7 +414,8 @@
         }
 
         NSArray *allKeys = [dictionary allKeys];
-        for (NSUInteger j = 0; j < [allKeys count]; j++) {
+        NSUInteger j;
+        for (j = 0; j < [allKeys count]; j++) {
             id candidateKey = [allKeys objectAtIndex:j];
             id candidateValue = [dictionary objectForKey:candidateKey];
             if ([candidateValue isKindOfClass:[NSDictionary class]]) {
