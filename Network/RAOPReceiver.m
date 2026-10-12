@@ -47,7 +47,7 @@
         format.mFramesPerPacket = 1;
         format.mBytesPerFrame = 4;
 
-        audioPlayer = [[CoreAudioPlayer alloc] initWithFormat:&format];
+        audioPlayer = [[CoreAudioPlayer alloc] initWithAudioFormat:&format];
         serviceBrowser = [[NSNetServiceBrowser alloc] init];
         [serviceBrowser setDelegate:self];
     }

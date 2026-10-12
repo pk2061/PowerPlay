@@ -52,7 +52,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
     return noErr;
 }
 
-- (id)initWithFormat:(AudioStreamBasicDescription *)format {
+- (id)initWithAudioFormat:(AudioStreamBasicDescription *)format {
     self = [super init];
     if (self != nil) {
         if (format == NULL) {

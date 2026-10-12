@@ -4,6 +4,25 @@
 #define NSRegularExpressionSearch 0x0001
 #endif
 
+@interface NSString (PowerPlayLegacyCompatibility)
+- (NSString *)stringByReplacingOccurrencesOfString:(NSString *)target withString:(NSString *)replacement;
+@end
+
+@interface NSMutableString (PowerPlayLegacyCompatibility)
+- (void)replaceCharactersInRange:(NSRange)range withString:(NSString *)replacement;
+@end
+
+@interface NSPropertyListSerialization (PowerPlayLegacyCompatibility)
++ (id)propertyListWithData:(NSData *)data
+                   options:(NSPropertyListMutabilityOptions)opt
+                   format:(NSPropertyListFormat *)format
+                    error:(NSError **)error;
+@end
+
+@interface AirPlayMetadataParser (PrivateCompatibility)
+- (NSData *)artworkDataFromObject:(id)object;
+@end
+
 @implementation AirPlayMetadataParser
 
 - (id)init {
