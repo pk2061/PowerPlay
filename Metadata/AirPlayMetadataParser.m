@@ -1,5 +1,9 @@
 #import "AirPlayMetadataParser.h"
 
+#ifndef NSRegularExpressionSearch
+#define NSRegularExpressionSearch 0x0001
+#endif
+
 @implementation AirPlayMetadataParser
 
 - (id)init {
@@ -320,8 +324,12 @@
     }
 
     if ([result count] == 0) {
-        NSString *text = [stringData stringByReplacingOccurrencesOfString:@"<[^>]+>" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, [stringData length])];
-        NSString *cleanText = [text stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:0 range:NSMakeRange(0, [text length])];
+        NSMutableString *text = [NSMutableString stringWithString:stringData];
+        NSRange tagRange;
+        while ((tagRange = [text rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch]).location != NSNotFound) {
+            [text replaceCharactersInRange:tagRange withString:@""];
+        }
+        NSString *cleanText = [text stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
 
         if ([stringData rangeOfString:@"title" options:NSCaseInsensitiveSearch].location != NSNotFound) {
             NSRange start = [stringData rangeOfString:@"<title>"];

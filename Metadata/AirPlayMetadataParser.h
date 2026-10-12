@@ -1,5 +1,15 @@
 #import <Foundation/Foundation.h>
 
+#ifndef NSINTEGER_DEFINED
+typedef long NSInteger;
+#define NSINTEGER_DEFINED 1
+#endif
+
+#ifndef NSUINTEGER_DEFINED
+typedef unsigned long NSUInteger;
+#define NSUINTEGER_DEFINED 1
+#endif
+
 @interface AirPlayMetadataParser : NSObject {
     NSMutableDictionary *lastMetadata;
 }
