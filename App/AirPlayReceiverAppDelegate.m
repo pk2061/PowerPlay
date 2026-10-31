@@ -4,11 +4,52 @@
 @implementation AirPlayReceiverAppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+    [self installApplicationMenu];
     receiver = [[RAOPReceiver alloc] init];
     growlNotifier = [[GrowlNotifier alloc] init];
     lastGrowlTitle = nil;
     [self buildUI];
     [receiver startBrowsing];
+}
+
+- (void)installApplicationMenu {
+    NSMenu *mainMenu = [[NSMenu alloc] initWithTitle:@"MainMenu"];
+    NSMenuItem *applicationMenuItem = [[NSMenuItem alloc] initWithTitle:@"PowerPlay"
+                                                               action:nil
+                                                        keyEquivalent:@""];
+    NSMenu *applicationMenu = [[NSMenu alloc] initWithTitle:@"PowerPlay"];
+
+    NSMenuItem *aboutItem = [applicationMenu addItemWithTitle:@"About PowerPlay"
+                                                       action:@selector(orderFrontStandardAboutPanel:)
+                                                keyEquivalent:@""];
+    [aboutItem setTarget:NSApp];
+    [applicationMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *hideItem = [applicationMenu addItemWithTitle:@"Hide PowerPlay"
+                                                      action:@selector(hide:)
+                                               keyEquivalent:@"h"];
+    [hideItem setTarget:NSApp];
+    NSMenuItem *hideOthersItem = [applicationMenu addItemWithTitle:@"Hide Others"
+                                                           action:@selector(hideOtherApplications:)
+                                                    keyEquivalent:@"h"];
+    [hideOthersItem setTarget:NSApp];
+    [hideOthersItem setKeyEquivalentModifierMask:(NSCommandKeyMask | NSAlternateKeyMask)];
+    NSMenuItem *showAllItem = [applicationMenu addItemWithTitle:@"Show All"
+                                                         action:@selector(unhideAllApplications:)
+                                                  keyEquivalent:@""];
+    [showAllItem setTarget:NSApp];
+    [applicationMenu addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *quitItem = [applicationMenu addItemWithTitle:@"Quit PowerPlay"
+                                                      action:@selector(terminate:)
+                                               keyEquivalent:@"q"];
+    [quitItem setTarget:NSApp];
+
+    [applicationMenuItem setSubmenu:applicationMenu];
+    [mainMenu addItem:applicationMenuItem];
+    [NSApp setMainMenu:mainMenu];
+
+    [applicationMenu release];
+    [applicationMenuItem release];
+    [mainMenu release];
 }
 
 - (void)buildUI {
