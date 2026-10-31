@@ -1,0 +1,219 @@
+// !$*UTF8*$!
+{
+	29B97313FDCFA39411CA2CEA /* Project object */ = {
+		activeBuildConfigurationName = Release;
+		activeExecutable = 3DDA0C5F30702C7F00C1E62F /* PowerPlay */;
+		activeTarget = 8D1107260486CEB800E47090 /* PowerPlay */;
+		addToTargets = (
+			8D1107260486CEB800E47090 /* PowerPlay */,
+		);
+		breakpointsGroup = 3DDA0C6630702C9E00C1E62F /* XCBreakpointsBucket */;
+		codeSenseManager = 3DDA0C6530702C9E00C1E62F /* Code sense */;
+		executables = (
+			3DDA0C5F30702C7F00C1E62F /* PowerPlay */,
+		);
+		perUserDictionary = {
+			PBXConfiguration.PBXFileTableDataSource3.PBXBookmarksDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXBookmarksDataSource_NameID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					200,
+					200,
+					276,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXBookmarksDataSource_LocationID,
+					PBXBookmarksDataSource_NameID,
+					PBXBookmarksDataSource_CommentsID,
+				);
+			};
+			PBXConfiguration.PBXFileTableDataSource3.PBXErrorsWarningsDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXErrorsWarningsDataSource_LocationID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					20,
+					300,
+					192.2085,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXErrorsWarningsDataSource_TypeID,
+					PBXErrorsWarningsDataSource_MessageID,
+					PBXErrorsWarningsDataSource_LocationID,
+				);
+			};
+			PBXConfiguration.PBXFileTableDataSource3.PBXFileTableDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXFileDataSource_Filename_ColumnID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					20,
+					302,
+					20,
+					48,
+					43,
+					43,
+					20,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXFileDataSource_FiletypeID,
+					PBXFileDataSource_Filename_ColumnID,
+					PBXFileDataSource_Built_ColumnID,
+					PBXFileDataSource_ObjectSize_ColumnID,
+					PBXFileDataSource_Errors_ColumnID,
+					PBXFileDataSource_Warnings_ColumnID,
+					PBXFileDataSource_Target_ColumnID,
+				);
+			};
+			PBXConfiguration.PBXFileTableDataSource3.PBXSymbolsDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXSymbolsDataSource_SymbolNameID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					16,
+					200,
+					50,
+					200,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXSymbolsDataSource_SymbolTypeIconID,
+					PBXSymbolsDataSource_SymbolNameID,
+					PBXSymbolsDataSource_SymbolTypeID,
+					PBXSymbolsDataSource_ReferenceNameID,
+				);
+			};
+			PBXConfiguration.PBXTargetDataSource.PBXTargetDataSource = {
+				PBXFileTableDataSourceColumnSortingDirectionKey = "-1";
+				PBXFileTableDataSourceColumnSortingKey = PBXFileDataSource_Filename_ColumnID;
+				PBXFileTableDataSourceColumnWidthsKey = (
+					20,
+					200,
+					122,
+					20,
+					48,
+					43,
+					43,
+				);
+				PBXFileTableDataSourceColumnsKey = (
+					PBXFileDataSource_FiletypeID,
+					PBXFileDataSource_Filename_ColumnID,
+					PBXTargetDataSource_PrimaryAttribute,
+					PBXFileDataSource_Built_ColumnID,
+					PBXFileDataSource_ObjectSize_ColumnID,
+					PBXFileDataSource_Errors_ColumnID,
+					PBXFileDataSource_Warnings_ColumnID,
+				);
+			};
+			PBXPerProjectTemplateStateSaveDate = 815147761;
+			PBXWorkspaceStateSaveDate = 815147761;
+		};
+		sourceControlManager = 3DDA0C6430702C9E00C1E62F /* Source Control */;
+		userBuildSettings = {
+		};
+	};
+	3DDA0C5F30702C7F00C1E62F /* PowerPlay */ = {
+		isa = PBXExecutable;
+		activeArgIndex = 2147483647;
+		activeArgIndices = (
+		);
+		argumentStrings = (
+		);
+		autoAttachOnCrash = 1;
+		configStateDict = {
+		};
+		customDataFormattersEnabled = 1;
+		debuggerPlugin = GDBDebugging;
+		disassemblyDisplayState = 0;
+		dylibVariantSuffix = "";
+		enableDebugStr = 1;
+		environmentEntries = (
+		);
+		executableSystemSymbolLevel = 0;
+		executableUserSymbolLevel = 0;
+		libgmallocEnabled = 0;
+		name = PowerPlay;
+		sourceDirectories = (
+		);
+	};
+	3DDA0C6430702C9E00C1E62F /* Source Control */ = {
+		isa = PBXSourceControlManager;
+		fallbackIsa = XCSourceControlManager;
+		isSCMEnabled = 0;
+		scmConfiguration = {
+		};
+		scmType = "";
+	};
+	3DDA0C6530702C9E00C1E62F /* Code sense */ = {
+		isa = PBXCodeSenseManager;
+		indexTemplatePath = "";
+	};
+	3DDA0C6630702C9E00C1E62F /* XCBreakpointsBucket */ = {
+		isa = XCBreakpointsBucket;
+		name = "Project Breakpoints";
+		objects = (
+		);
+	};
+	8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {857, 448}}";
+			sepNavSelRange = "{98, 75}";
+			sepNavVisRect = "{{0, 0}, {857, 191}}";
+			sepNavWindowFrame = "{{125, 110}, {578, 511}}";
+		};
+	};
+	8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {902, 2562}}";
+			sepNavSelRange = "{6401, 0}";
+			sepNavVisRect = "{{0, 1550}, {857, 191}}";
+			sepNavWindowFrame = "{{38, 209}, {578, 511}}";
+		};
+	};
+	8D1107120486CEB800E47090 /* ALACDecoder.m */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {857, 4172}}";
+			sepNavSelRange = "{9415, 0}";
+			sepNavVisRect = "{{0, 766}, {857, 191}}";
+			sepNavWindowFrame = "{{61, 188}, {578, 511}}";
+		};
+	};
+	8D1107130486CEB800E47090 /* CoreAudioPlayer.h */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {639, 350}}";
+			sepNavSelRange = "{145, 30}";
+			sepNavVisRect = "{{0, 0}, {639, 268}}";
+		};
+	};
+	8D1107140486CEB800E47090 /* CoreAudioPlayer.m */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {857, 2156}}";
+			sepNavSelRange = "{4901, 0}";
+			sepNavVisRect = "{{0, 0}, {857, 191}}";
+		};
+	};
+	8D1107150486CEB800E47090 /* RAOPReceiver.h */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {857, 1344}}";
+			sepNavSelRange = "{2741, 0}";
+			sepNavVisRect = "{{0, 710}, {857, 191}}";
+			sepNavWindowFrame = "{{371, -58}, {578, 511}}";
+		};
+	};
+	8D1107160486CEB800E47090 /* RAOPReceiver.m */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {1034, 14280}}";
+			sepNavSelRange = "{1501, 72}";
+			sepNavVisRect = "{{0, 582}, {879, 223}}";
+		};
+	};
+	8D1107180486CEB800E47090 /* AirPlayMetadataParser.m */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {1058, 6454}}";
+			sepNavSelRange = "{16128, 0}";
+			sepNavVisRect = "{{0, 1464}, {879, 223}}";
+		};
+	};
+	8D1107260486CEB800E47090 /* PowerPlay */ = {
+		activeExec = 0;
+		executables = (
+			3DDA0C5F30702C7F00C1E62F /* PowerPlay */,
+		);
+	};
+}
