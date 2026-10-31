@@ -22,6 +22,7 @@ This project is in a mature protocol skeleton and UI integration state.
 - sender-like validation for transport, metadata, and ALAC payloads
 - CoreAudio queue setup and output buffer flow
 - compile validation in a legacy Objective-C configuration
+- Tiger-era ICNS app icon generated from `Resources/Images/PowerPlay_icon.png`
 
 ### Known caveat
 The implementation is not yet proven against a live AirPlay sender stream. The validation so far is synthetic and sender-model based rather than packet capture based.
@@ -41,12 +42,11 @@ The implementation is not yet proven against a live AirPlay sender stream. The v
 - App/GrowlNotifier.m
 
 ## Remaining high-priority work
-1. Validate with a real AirPlay sender trace
-2. Confirm RTSP/RTP negotiation matches actual sender behavior
-3. Verify ALAC decoding against genuine sender payloads
-4. Tune audio queue timing and latency under real packet flow
-5. Check PowerPC / Tiger compatibility specifics on legacy hardware
-6. Final Xcode packaging and project setup refinement
+1. Verify app startup and icon appearance on Tiger or a Tiger-compatible system
+2. Validate with a real AirPlay sender trace
+3. Confirm RTSP/RTP negotiation matches actual sender behavior
+4. Verify ALAC decoding and audio timing against genuine sender payloads
+5. Check remaining PowerPC / Tiger compatibility specifics on legacy hardware
 
 ## Build verification
 Last successful syntax-only compile command:
@@ -55,12 +55,17 @@ clang -fno-objc-arc -fsyntax-only -I. -IApp -IAudio -INetwork -IMetadata -IUI -f
 
 Result: exit code 0; no syntax or parser errors. Only deprecation warnings from the modern SDK appeared.
 
-Limitation: Xcode 2.5 and the Tiger SDK are not available in this environment, so a real IDE build on the legacy toolchain is still unverified.
+Limitation: Xcode 2.5 and the Tiger SDK are not available in this environment. Xcode 27 is installed, but it cannot open this Xcode 2.5 project, so a full build on the legacy toolchain is still unverified.
 
-## Recommended next step
-The most valuable next action is real sender capture validation: capture actual AirPlay RTP/RTSP/metadata traffic from a source device and compare it against the parsing rules in the receiver.
+## Runtime packaging status
+`Project/MainMenu.xib` is the project-referenced source; a separate `Interface/MainMenu.xib` also exists. Xcode 27's `ibtool` compiled the project source into `Project/MainMenu.nib`, and the target's Resources phase now includes the compiled nib instead of the raw XIB. The source declares macOS 10.4 deployment, but successful compilation does not prove runtime compatibility; startup still needs verification on Tiger.
+
+The compiled nib is a package containing `keyedobjects.nib` and `keyedobjects-101300.nib`. `plutil -lint` accepts the project file, but Xcode 27's `xcodebuild` rejects its Xcode 2.5 project format. Do not rename the XIB to `.nib`; verify the resulting app bundle on Tiger using the legacy toolchain.
+
+## App icon status
+`Resources/Images/PowerPlay.icns` was replaced with a classic RGB/mask ICNS containing 16, 32, 48, and 128 pixel variants and no embedded PNG chunks. The container and decoding were validated with `iconutil`, but actual display on Tiger remains unverified. The source image is `Resources/Images/PowerPlay_icon.png`.
+
+The icon and its source were committed and pushed to `origin/main` as `f864dcc` (`Add Tiger-compatible PowerPlay app icon`).
 
 ## Resume summary
-Latest compatibility work replaced `NSUInteger` usages in `Audio/ALACDecoder.m` with legacy-safe `unsigned long` types and added an explicit Foundation import. The fix was committed and pushed to `origin/main` as `dcd8a5e` (`Fix legacy NSUInteger compatibility in ALAC decoder`). The worktree was clean when this handoff was prepared.
-
-The receiver is structurally complete enough to continue as a real project. Next steps are to confirm a build with Xcode 2.5 on a Tiger SDK machine, then validate protocol correctness against real AirPlay traffic. Live sender behavior and genuine ALAC payload decoding remain unverified.
+The source passes the recorded syntax-only compile, and the compiled main nib is now included in the target's Resources phase. Xcode 2.5/Tiger build and runtime validation remain outstanding. The new legacy-format icon is committed, pending on-device confirmation.
