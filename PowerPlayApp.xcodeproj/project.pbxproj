@@ -22,7 +22,7 @@
 		8D1107370486CEB800E47090 /* CoverArtView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D11071A0486CEB800E47090 /* CoverArtView.m */; };
 		8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */ = {isa = PBXBuildFile; fileRef = 8D11071E0486CEB800E47090 /* PowerPlay.icns */; };
 		8D1107410486CEB800E47090 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8D11071B0486CEB800E47090 /* Info.plist */; };
-		8D1107420486CEB800E47090 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8D11071C0486CEB800E47090 /* MainMenu.xib */; };
+		A1B2C3D4E5F60718293A4B5D /* MainMenu.nib in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +49,7 @@
 		8D11071A0486CEB800E47090 /* CoverArtView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoverArtView.m; sourceTree = "<group>"; };
 		8D11071B0486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D11071C0486CEB800E47090 /* MainMenu.xib */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.xib; path = MainMenu.xib; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; path = MainMenu.nib; sourceTree = "<group>"; };
 		8D11071D0486CEB800E47090 /* build.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = build.sh; sourceTree = "<group>"; };
 		8D11071E0486CEB800E47090 /* PowerPlay.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = PowerPlay.icns; sourceTree = "<group>"; };
 		8D11072F0486CEB800E47090 /* PowerPlay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerPlay.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -146,6 +147,7 @@
 			children = (
 				8D11071B0486CEB800E47090 /* Info.plist */,
 				8D11071C0486CEB800E47090 /* MainMenu.xib */,
+				A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */,
 				8D11071D0486CEB800E47090 /* build.sh */,
 			);
 			path = Project;
@@ -220,7 +222,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D1107410486CEB800E47090 /* Info.plist in Resources */,
-				8D1107420486CEB800E47090 /* MainMenu.xib in Resources */,
+				A1B2C3D4E5F60718293A4B5D /* MainMenu.nib in Resources */,
 				8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
