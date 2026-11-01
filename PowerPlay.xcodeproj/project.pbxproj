@@ -96,7 +96,6 @@
             children = (
                 8D11071B0486CEB800E47090 /* Info.plist */,
                 8D11071C0486CEB800E47090 /* MainMenu.xib */,
-                8D1107480486CEB800E47090 /* MainMenu.nib */,
                 8D11071D0486CEB800E47090 /* build.sh */,
             );
             path = Project;
@@ -180,7 +179,6 @@
             buildActionMask = 2147483647;
             files = (
                 8D1107410486CEB800E47090 /* Info.plist in Resources */,
-                8D1107490486CEB800E47090 /* MainMenu.nib in Resources */,
                 8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
@@ -369,12 +367,6 @@
             path = MainMenu.xib;
             sourceTree = "<group>";
         };
-        8D1107480486CEB800E47090 /* MainMenu.nib */ = {
-            isa = PBXFileReference;
-            lastKnownFileType = wrapper.nib;
-            path = MainMenu.nib;
-            sourceTree = "<group>";
-        };
         8D11071D0486CEB800E47090 /* build.sh */ = {
             isa = PBXFileReference;
             path = build.sh;
@@ -436,10 +428,6 @@
         8D1107410486CEB800E47090 /* Info.plist in Resources */ = {
             isa = PBXBuildFile;
             fileRef = 8D11071B0486CEB800E47090 /* Info.plist */;
-        };
-        8D1107490486CEB800E47090 /* MainMenu.nib in Resources */ = {
-            isa = PBXBuildFile;
-            fileRef = 8D1107480486CEB800E47090 /* MainMenu.nib */;
         };
         8D1107430486CEB800E47090 /* AudioUnit.framework in Frameworks */ = {
             isa = PBXBuildFile;
