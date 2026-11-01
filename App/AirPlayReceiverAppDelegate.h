@@ -24,6 +24,7 @@
     NSString *lastGrowlTitle;
 }
 
+- (void)installApplicationMenu;
 - (void)buildUI;
 - (void)refreshUI;
 
