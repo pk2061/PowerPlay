@@ -50,6 +50,136 @@ static NSString *PowerPlayDeviceIdentifier(void) {
     return [NSString stringWithCString:deviceID encoding:NSASCIIStringEncoding];
 }
 
+static NSUInteger PowerPlayRTSPHeaderEnd(const unsigned char *bytes, NSUInteger length) {
+    NSUInteger i;
+    for (i = 0; i + 3 < length; i++) {
+        if (bytes[i] == '\r' && bytes[i + 1] == '\n' &&
+            bytes[i + 2] == '\r' && bytes[i + 3] == '\n') {
+            return i;
+        }
+    }
+    return NSNotFound;
+}
+
+static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
+    NSMutableData *buffer = [NSMutableData data];
+    unsigned char chunk[4096];
+    NSUInteger headerEnd = NSNotFound;
+    NSUInteger contentLength = 0;
+    BOOL haveContentLength = NO;
+    NSString *headerText = nil;
+    NSArray *headerLines = nil;
+
+    for (;;) {
+        const unsigned char *bytes = [buffer bytes];
+        if (headerEnd == NSNotFound) {
+            headerEnd = PowerPlayRTSPHeaderEnd(bytes, [buffer length]);
+            if (headerEnd != NSNotFound) {
+                headerText = [[[NSString alloc] initWithBytes:bytes
+                                                       length:headerEnd
+                                                     encoding:NSASCIIStringEncoding] autorelease];
+                if (headerText == nil) {
+                    return nil;
+                }
+                headerLines = [headerText componentsSeparatedByString:@"\r\n"];
+                NSUInteger lineIndex;
+                for (lineIndex = 1; lineIndex < [headerLines count]; lineIndex++) {
+                    NSString *line = [headerLines objectAtIndex:lineIndex];
+                    NSRange colon = [line rangeOfString:@":"];
+                    if (colon.location == NSNotFound) {
+                        continue;
+                    }
+                    NSString *key = [[line substringToIndex:colon.location] lowercaseString];
+                    if ([key isEqualToString:@"content-length"]) {
+                        NSString *value = [[line substringFromIndex:colon.location + 1]
+                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                        int lengthValue = [value intValue];
+                        if (lengthValue < 0 || lengthValue > 65536) {
+                            return nil;
+                        }
+                        contentLength = (NSUInteger)lengthValue;
+                        haveContentLength = YES;
+                        break;
+                    }
+                }
+                if (!haveContentLength) {
+                    contentLength = 0;
+                }
+            } else if ([buffer length] > 65536) {
+                return nil;
+            }
+        }
+
+        if (headerEnd != NSNotFound &&
+            [buffer length] >= headerEnd + 4 + contentLength) {
+            NSMutableDictionary *headers = [NSMutableDictionary dictionary];
+            NSUInteger lineIndex;
+            for (lineIndex = 1; lineIndex < [headerLines count]; lineIndex++) {
+                NSString *line = [headerLines objectAtIndex:lineIndex];
+                NSRange colon = [line rangeOfString:@":"];
+                if (colon.location == NSNotFound) {
+                    continue;
+                }
+                NSString *key = [[line substringToIndex:colon.location] lowercaseString];
+                NSString *value = [[line substringFromIndex:colon.location + 1]
+                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                [headers setObject:value forKey:key];
+            }
+
+            NSString *requestLine = [headerLines count] > 0 ? [headerLines objectAtIndex:0] : @"";
+            NSData *body = [NSData dataWithBytes:(bytes + headerEnd + 4) length:contentLength];
+            return [NSDictionary dictionaryWithObjectsAndKeys:
+                requestLine, @"requestLine",
+                headers, @"headers",
+                body, @"body", nil];
+        }
+
+        ssize_t received = recv(socketHandle, chunk, sizeof(chunk), 0);
+        if (received <= 0) {
+            return nil;
+        }
+        [buffer appendBytes:chunk length:(NSUInteger)received];
+        if ([buffer length] > 131072) {
+            return nil;
+        }
+    }
+}
+
+static void PowerPlaySendRTSPResponse(int socketHandle, NSString *response) {
+    NSData *responseData = [response dataUsingEncoding:NSUTF8StringEncoding];
+    const unsigned char *bytes = [responseData bytes];
+    NSUInteger remaining = [responseData length];
+    while (remaining > 0) {
+        ssize_t sent = send(socketHandle, bytes, remaining, 0);
+        if (sent <= 0) {
+            return;
+        }
+        bytes += sent;
+        remaining -= (NSUInteger)sent;
+    }
+}
+
+static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName) {
+    if (transport == nil || portName == nil) {
+        return 0;
+    }
+    NSArray *parts = [transport componentsSeparatedByString:@";"];
+    NSUInteger i;
+    for (i = 0; i < [parts count]; i++) {
+        NSString *part = [[parts objectAtIndex:i]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        NSRange equals = [part rangeOfString:@"="];
+        if (equals.location == NSNotFound) {
+            continue;
+        }
+        NSString *key = [[part substringToIndex:equals.location] lowercaseString];
+        if ([key isEqualToString:[portName lowercaseString]]) {
+            return [[part substringFromIndex:equals.location + 1] intValue];
+        }
+    }
+    return 0;
+}
+
 @implementation RAOPReceiver
 
 - (id)init {
@@ -57,6 +187,7 @@ static NSString *PowerPlayDeviceIdentifier(void) {
     if (self != nil) {
         publishedService = nil;
         listenerSocket = -1;
+        rtpControlSocket = -1;
         acceptingRTSP = NO;
         currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."]; 
         coverArtData = nil;
@@ -64,7 +195,8 @@ static NSString *PowerPlayDeviceIdentifier(void) {
         volume = 0.5f;
         controlPort = 5000;
         audioPort = 6000;
-        timingPort = 6001;
+        timingPort = 6002;
+        rtpControlPort = 6001;
         controlSocket = -1;
         audioSocket = -1;
         timingSocket = -1;
@@ -110,6 +242,10 @@ static NSString *PowerPlayDeviceIdentifier(void) {
     if (timingSocket >= 0) {
         close(timingSocket);
         timingSocket = -1;
+    }
+    if (rtpControlSocket >= 0) {
+        close(rtpControlSocket);
+        rtpControlSocket = -1;
     }
     [publishedService release];
     [currentTitle release];
@@ -231,50 +367,138 @@ static NSString *PowerPlayDeviceIdentifier(void) {
               inet_ntoa(peerAddress.sin_addr), (unsigned int)ntohs(peerAddress.sin_port));
 
         struct timeval receiveTimeout;
-        receiveTimeout.tv_sec = 5;
+        receiveTimeout.tv_sec = 30;
         receiveTimeout.tv_usec = 0;
         setsockopt(incomingSocket, SOL_SOCKET, SO_RCVTIMEO, &receiveTimeout, sizeof(receiveTimeout));
-
-        char requestBuffer[8192];
-        ssize_t received = recv(incomingSocket, requestBuffer, sizeof(requestBuffer) - 1, 0);
-        if (received > 0) {
-            requestBuffer[received] = '\0';
-            NSString *request = [NSString stringWithCString:requestBuffer encoding:NSUTF8StringEncoding];
-            if (request == nil) {
-                request = [NSString stringWithCString:requestBuffer encoding:NSISOLatin1StringEncoding];
-            }
-            NSArray *lines = [request componentsSeparatedByString:@"\r\n"];
-            NSString *requestLine = [lines count] > 0 ? [lines objectAtIndex:0] : @"";
-            NSString *cseq = @"1";
-            NSUInteger lineIndex;
-            for (lineIndex = 1; lineIndex < [lines count]; lineIndex++) {
-                NSString *line = [lines objectAtIndex:lineIndex];
-                NSRange colon = [line rangeOfString:@":"];
-                if (colon.location != NSNotFound &&
-                    [[line substringToIndex:colon.location] caseInsensitiveCompare:@"CSeq"] == NSOrderedSame) {
-                    cseq = [[line substringFromIndex:colon.location + 1]
-                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-                    break;
-                }
-            }
-
-            NSLog(@"RAOP: received RTSP request: %@", requestLine);
-            NSString *response;
-            if ([requestLine hasPrefix:@"OPTIONS "]) {
-                response = [NSString stringWithFormat:
-                    @"RTSP/1.0 200 OK\r\nCSeq: %@\r\nPublic: OPTIONS\r\nServer: PowerPlay/1.0\r\n\r\n", cseq];
-            } else {
-                response = [NSString stringWithFormat:
-                    @"RTSP/1.0 501 Not Implemented\r\nCSeq: %@\r\nServer: PowerPlay/1.0\r\n\r\n", cseq];
-            }
-            send(incomingSocket, [response UTF8String], [response lengthOfBytesUsingEncoding:NSUTF8StringEncoding], 0);
-        } else {
-            NSLog(@"RAOP: sender connected but sent no RTSP request");
-        }
-
+        NSAutoreleasePool *connectionPool = [[NSAutoreleasePool alloc] init];
+        [self handleRTSPConnection:incomingSocket];
         close(incomingSocket);
+        [connectionPool drain];
     }
     [threadPool drain];
+}
+
+- (void)handleRTSPConnection:(int)incomingSocket {
+    struct sockaddr_in peerAddress;
+    socklen_t peerLength = sizeof(peerAddress);
+    memset(&peerAddress, 0, sizeof(peerAddress));
+    if (getpeername(incomingSocket, (struct sockaddr *)&peerAddress, &peerLength) == 0) {
+        [hostAddress release];
+        hostAddress = [[NSString stringWithUTF8String:inet_ntoa(peerAddress.sin_addr)] copy];
+    }
+
+    [rtspSessionId release];
+    rtspSessionId = [[NSString stringWithFormat:@"PowerPlay-%u-%u",
+        (unsigned int)getpid(), (unsigned int)time(NULL)] copy];
+    rtspSessionEstablished = NO;
+    isSetupComplete = NO;
+    rtpSessionReady = NO;
+    isPlaying = NO;
+
+    while (acceptingRTSP) {
+        NSDictionary *request = PowerPlayReadRTSPRequest(incomingSocket);
+        if (request == nil) {
+            break;
+        }
+
+        NSString *requestLine = [request objectForKey:@"requestLine"];
+        NSArray *requestParts = [requestLine componentsSeparatedByString:@" "];
+        if ([requestParts count] < 2) {
+            break;
+        }
+        NSString *method = [[requestParts objectAtIndex:0] uppercaseString];
+        NSDictionary *headers = [request objectForKey:@"headers"];
+        NSString *cseq = [headers objectForKey:@"cseq"];
+        if (cseq == nil) {
+            cseq = @"1";
+        }
+        NSString *sessionHeader = [headers objectForKey:@"session"];
+        NSString *transport = [headers objectForKey:@"transport"];
+        NSString *status = @"200 OK";
+        NSString *responseHeaders = @"";
+
+        NSLog(@"RAOP: received RTSP request: %@", requestLine);
+
+        if ([method isEqualToString:@"OPTIONS"]) {
+            responseHeaders = @"Public: OPTIONS, ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, SET_PARAMETER, GET_PARAMETER\r\n";
+        } else if ([method isEqualToString:@"ANNOUNCE"]) {
+            rtspSessionEstablished = YES;
+        } else if ([method isEqualToString:@"SETUP"]) {
+            if (!rtspSessionEstablished) {
+                status = @"455 Method Not Valid in This State";
+            } else if (transport == nil || [transport rangeOfString:@"RTP/AVP/UDP" options:NSCaseInsensitiveSearch].location == NSNotFound) {
+                status = @"461 Unsupported Transport";
+            } else {
+                NSInteger senderControlPort = PowerPlayTransportPort(transport, @"control_port");
+                NSInteger senderTimingPort = PowerPlayTransportPort(transport, @"timing_port");
+                if (audioSocket >= 0) {
+                    close(audioSocket);
+                    audioSocket = -1;
+                }
+                if (rtpControlSocket >= 0) {
+                    close(rtpControlSocket);
+                    rtpControlSocket = -1;
+                }
+                if (timingSocket >= 0) {
+                    close(timingSocket);
+                    timingSocket = -1;
+                }
+
+                BOOL audioBound = [self openUDPListenerOnPort:audioPort socket:&audioSocket];
+                BOOL controlBound = audioBound && [self openUDPListenerOnPort:rtpControlPort socket:&rtpControlSocket];
+                BOOL timingBound = controlBound && [self openUDPListenerOnPort:timingPort socket:&timingSocket];
+                if (!timingBound) {
+                    if (audioSocket >= 0) { close(audioSocket); audioSocket = -1; }
+                    if (rtpControlSocket >= 0) { close(rtpControlSocket); rtpControlSocket = -1; }
+                    if (timingSocket >= 0) { close(timingSocket); timingSocket = -1; }
+                    status = @"500 Internal Server Error";
+                } else {
+                    isSetupComplete = YES;
+                    rtpSessionReady = YES;
+                    [metadata setObject:[NSNumber numberWithInt:(int)senderControlPort] forKey:@"sender_control_port"];
+                    [metadata setObject:[NSNumber numberWithInt:(int)senderTimingPort] forKey:@"sender_timing_port"];
+                    responseHeaders = [NSString stringWithFormat:
+                        @"Session: %@\r\nTransport: RTP/AVP/UDP;unicast;mode=record;server_port=%ld;control_port=%ld;timing_port=%ld\r\n",
+                        rtspSessionId, (long)audioPort, (long)rtpControlPort, (long)timingPort];
+                }
+            }
+        } else if ([method isEqualToString:@"RECORD"]) {
+            if (!isSetupComplete || (sessionHeader != nil && ![sessionHeader hasPrefix:rtspSessionId])) {
+                status = @"455 Method Not Valid in This State";
+            } else {
+                isPlaying = YES;
+                [audioPlayer start];
+                responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+            }
+        } else if ([method isEqualToString:@"PAUSE"]) {
+            isPlaying = NO;
+            [audioPlayer stop];
+            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+        } else if ([method isEqualToString:@"TEARDOWN"]) {
+            isPlaying = NO;
+            isSetupComplete = NO;
+            rtpSessionReady = NO;
+            rtspSessionEstablished = NO;
+            [audioPlayer stop];
+            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+        } else if ([method isEqualToString:@"FLUSH"] ||
+                   [method isEqualToString:@"SET_PARAMETER"] ||
+                   [method isEqualToString:@"GET_PARAMETER"]) {
+            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+        } else {
+            status = @"501 Not Implemented";
+        }
+
+        NSString *response = [NSString stringWithFormat:
+            @"RTSP/1.0 %@\r\nCSeq: %@\r\n%@Server: PowerPlay/1.0\r\n\r\n",
+            status, cseq, responseHeaders];
+        PowerPlaySendRTSPResponse(incomingSocket, response);
+
+        if ([method isEqualToString:@"TEARDOWN"] ||
+            [status hasPrefix:@"455"] || [status hasPrefix:@"461"] || [status hasPrefix:@"500"]) {
+            break;
+        }
+    }
 }
 
 - (void)connectToService:(NSNetService *)service {
@@ -443,6 +667,10 @@ static NSString *PowerPlayDeviceIdentifier(void) {
     if (timingSocket >= 0) {
         close(timingSocket);
         timingSocket = -1;
+    }
+    if (rtpControlSocket >= 0) {
+        close(rtpControlSocket);
+        rtpControlSocket = -1;
     }
 
     rtspSessionEstablished = NO;
