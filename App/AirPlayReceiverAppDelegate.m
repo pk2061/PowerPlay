@@ -9,7 +9,7 @@
     growlNotifier = [[GrowlNotifier alloc] init];
     lastGrowlTitle = nil;
     [self buildUI];
-    [receiver startBrowsing];
+    [receiver startReceiver];
 }
 
 - (void)installApplicationMenu {
@@ -218,7 +218,7 @@
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
-    [receiver stopBrowsing];
+    [receiver stopReceiver];
     [growlNotifier release];
     [lastGrowlTitle release];
     [receiver release];

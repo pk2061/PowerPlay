@@ -2,17 +2,62 @@
 
 #import <sys/socket.h>
 #import <netinet/in.h>
+#import <net/if.h>
+#import <net/if_dl.h>
 #import <arpa/inet.h>
+#import <ifaddrs.h>
 #import <unistd.h>
 #import <string.h>
 #import <errno.h>
+#import <stdio.h>
+
+static NSString *PowerPlayDeviceIdentifier(void) {
+    struct ifaddrs *interfaces = NULL;
+    struct ifaddrs *interface = NULL;
+    char deviceID[13] = "000000000001";
+    char fallbackID[13] = "";
+
+    if (getifaddrs(&interfaces) == 0) {
+        for (interface = interfaces; interface != NULL; interface = interface->ifa_next) {
+            if (interface->ifa_addr == NULL || interface->ifa_addr->sa_family != AF_LINK ||
+                (interface->ifa_flags & IFF_LOOPBACK) != 0) {
+                continue;
+            }
+
+            struct sockaddr_dl *linkAddress = (struct sockaddr_dl *)interface->ifa_addr;
+            if (linkAddress->sdl_alen != 6) {
+                continue;
+            }
+
+            const unsigned char *address = (const unsigned char *)LLADDR(linkAddress);
+            char candidate[13];
+            snprintf(candidate, sizeof(candidate), "%02X%02X%02X%02X%02X%02X",
+                     address[0], address[1], address[2], address[3], address[4], address[5]);
+            if (fallbackID[0] == '\0') {
+                memcpy(fallbackID, candidate, sizeof(fallbackID));
+            }
+            if (strcmp(interface->ifa_name, "en0") == 0) {
+                memcpy(deviceID, candidate, sizeof(deviceID));
+                break;
+            }
+        }
+        freeifaddrs(interfaces);
+    }
+
+    if (strcmp(deviceID, "000000000001") == 0 && fallbackID[0] != '\0') {
+        memcpy(deviceID, fallbackID, sizeof(deviceID));
+    }
+    return [NSString stringWithCString:deviceID encoding:NSASCIIStringEncoding];
+}
 
 @implementation RAOPReceiver
 
 - (id)init {
     self = [super init];
     if (self != nil) {
-        discoveredServices = [[NSMutableArray alloc] init];
+        publishedService = nil;
+        listenerSocket = -1;
+        acceptingRTSP = NO;
         currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."]; 
         coverArtData = nil;
         isPlaying = NO;
@@ -48,13 +93,12 @@
         format.mBytesPerFrame = 4;
 
         audioPlayer = [[CoreAudioPlayer alloc] initWithAudioFormat:&format];
-        serviceBrowser = [[NSNetServiceBrowser alloc] init];
-        [serviceBrowser setDelegate:self];
     }
     return self;
 }
 
 - (void)dealloc {
+    [self stopReceiver];
     if (controlSocket >= 0) {
         close(controlSocket);
         controlSocket = -1;
@@ -67,9 +111,7 @@
         close(timingSocket);
         timingSocket = -1;
     }
-    [serviceBrowser stop];
-    [serviceBrowser release];
-    [discoveredServices release];
+    [publishedService release];
     [currentTitle release];
     [coverArtData release];
     [resolvedService release];
@@ -85,17 +127,154 @@
     [super dealloc];
 }
 
-- (void)startBrowsing {
-    [serviceBrowser searchForServicesOfType:@"_raop._tcp." inDomain:@""];
+- (void)startReceiver {
+    if (listenerSocket >= 0) {
+        return;
+    }
+
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket < 0) {
+        NSLog(@"RAOP: could not create RTSP listener (%d)", errno);
+        return;
+    }
+
+    int reuse = 1;
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+    struct sockaddr_in localAddress;
+    memset(&localAddress, 0, sizeof(localAddress));
+    localAddress.sin_family = AF_INET;
+    localAddress.sin_port = 0;
+    localAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(serverSocket, (struct sockaddr *)&localAddress, sizeof(localAddress)) != 0 ||
+        listen(serverSocket, 4) != 0) {
+        NSLog(@"RAOP: could not bind RTSP listener (%d)", errno);
+        close(serverSocket);
+        return;
+    }
+
+    socklen_t addressLength = sizeof(localAddress);
+    if (getsockname(serverSocket, (struct sockaddr *)&localAddress, &addressLength) != 0) {
+        NSLog(@"RAOP: could not determine RTSP port (%d)", errno);
+        close(serverSocket);
+        return;
+    }
+
+    listenerSocket = serverSocket;
+    acceptingRTSP = YES;
+    [NSThread detachNewThreadSelector:@selector(acceptRTSPConnections)
+                             toTarget:self
+                           withObject:nil];
+
+    NSString *deviceID = PowerPlayDeviceIdentifier();
+    NSString *serviceName = [NSString stringWithFormat:@"%@@PowerPlay", deviceID];
+    publishedService = [[NSNetService alloc] initWithDomain:@"local."
+                                                        type:@"_raop._tcp."
+                                                        name:serviceName
+                                                        port:ntohs(localAddress.sin_port)];
+    [publishedService setDelegate:self];
+
+    NSMutableDictionary *txtRecord = [NSMutableDictionary dictionary];
+    [txtRecord setObject:[@"1" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"txtvers"];
+    [txtRecord setObject:[@"2" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"ch"];
+    [txtRecord setObject:[@"0,1" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"cn"];
+    [txtRecord setObject:[@"0,1" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"et"];
+    [txtRecord setObject:[@"0,1,2" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"md"];
+    [txtRecord setObject:[@"false" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"pw"];
+    [txtRecord setObject:[@"44100" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"sr"];
+    [txtRecord setObject:[@"16" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"ss"];
+    [txtRecord setObject:[@"false" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"sv"];
+    [txtRecord setObject:[@"UDP" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"tp"];
+    [txtRecord setObject:[@"3" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"vn"];
+    [txtRecord setObject:[@"220.68" dataUsingEncoding:NSUTF8StringEncoding] forKey:@"vs"];
+    [publishedService setTXTRecordData:[NSNetService dataFromTXTRecordDictionary:txtRecord]];
+    [publishedService publish];
+
+    NSLog(@"RAOP: publishing %@ on TCP port %u", serviceName, (unsigned int)ntohs(localAddress.sin_port));
 }
 
-- (void)stopBrowsing {
-    [serviceBrowser stop];
-    if (controlSocket >= 0) {
-        close(controlSocket);
-        controlSocket = -1;
+- (void)stopReceiver {
+    acceptingRTSP = NO;
+    if (publishedService != nil) {
+        [publishedService stop];
+        [publishedService setDelegate:nil];
+        [publishedService release];
+        publishedService = nil;
+    }
+    if (listenerSocket >= 0) {
+        shutdown(listenerSocket, SHUT_RDWR);
+        close(listenerSocket);
+        listenerSocket = -1;
     }
     [self teardownSession];
+}
+
+- (void)acceptRTSPConnections {
+    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    while (acceptingRTSP) {
+        int serverSocket = listenerSocket;
+        struct sockaddr_in peerAddress;
+        socklen_t peerLength = sizeof(peerAddress);
+        int incomingSocket = accept(serverSocket, (struct sockaddr *)&peerAddress, &peerLength);
+        if (incomingSocket < 0) {
+            if (!acceptingRTSP) {
+                break;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            NSLog(@"RAOP: RTSP accept failed (%d)", errno);
+            continue;
+        }
+
+        NSLog(@"RAOP: accepted RTSP connection from %s:%u",
+              inet_ntoa(peerAddress.sin_addr), (unsigned int)ntohs(peerAddress.sin_port));
+
+        struct timeval receiveTimeout;
+        receiveTimeout.tv_sec = 5;
+        receiveTimeout.tv_usec = 0;
+        setsockopt(incomingSocket, SOL_SOCKET, SO_RCVTIMEO, &receiveTimeout, sizeof(receiveTimeout));
+
+        char requestBuffer[8192];
+        ssize_t received = recv(incomingSocket, requestBuffer, sizeof(requestBuffer) - 1, 0);
+        if (received > 0) {
+            requestBuffer[received] = '\0';
+            NSString *request = [NSString stringWithCString:requestBuffer encoding:NSUTF8StringEncoding];
+            if (request == nil) {
+                request = [NSString stringWithCString:requestBuffer encoding:NSISOLatin1StringEncoding];
+            }
+            NSArray *lines = [request componentsSeparatedByString:@"\r\n"];
+            NSString *requestLine = [lines count] > 0 ? [lines objectAtIndex:0] : @"";
+            NSString *cseq = @"1";
+            NSUInteger lineIndex;
+            for (lineIndex = 1; lineIndex < [lines count]; lineIndex++) {
+                NSString *line = [lines objectAtIndex:lineIndex];
+                NSRange colon = [line rangeOfString:@":"];
+                if (colon.location != NSNotFound &&
+                    [[line substringToIndex:colon.location] caseInsensitiveCompare:@"CSeq"] == NSOrderedSame) {
+                    cseq = [[line substringFromIndex:colon.location + 1]
+                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    break;
+                }
+            }
+
+            NSLog(@"RAOP: received RTSP request: %@", requestLine);
+            NSString *response;
+            if ([requestLine hasPrefix:@"OPTIONS "]) {
+                response = [NSString stringWithFormat:
+                    @"RTSP/1.0 200 OK\r\nCSeq: %@\r\nPublic: OPTIONS\r\nServer: PowerPlay/1.0\r\n\r\n", cseq];
+            } else {
+                response = [NSString stringWithFormat:
+                    @"RTSP/1.0 501 Not Implemented\r\nCSeq: %@\r\nServer: PowerPlay/1.0\r\n\r\n", cseq];
+            }
+            send(incomingSocket, [response UTF8String], [response lengthOfBytesUsingEncoding:NSUTF8StringEncoding], 0);
+        } else {
+            NSLog(@"RAOP: sender connected but sent no RTSP request");
+        }
+
+        close(incomingSocket);
+    }
+    [threadPool drain];
 }
 
 - (void)connectToService:(NSNetService *)service {
@@ -873,22 +1052,6 @@
     }
 }
 
-#pragma mark - NSNetServiceBrowserDelegate
-
-- (void)netServiceBrowser:(NSNetServiceBrowser *)browser didFindService:(NSNetService *)service moreComing:(BOOL)moreComing {
-    if (service == nil) {
-        return;
-    }
-
-    [service setDelegate:self];
-    [discoveredServices addObject:service];
-    [service resolveWithTimeout:5.0];
-}
-
-- (void)netServiceBrowser:(NSNetServiceBrowser *)browser didRemoveService:(NSNetService *)service moreComing:(BOOL)moreComing {
-    [discoveredServices removeObject:service];
-}
-
 #pragma mark - NSNetServiceDelegate
 
 - (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData {
@@ -911,6 +1074,14 @@
     if ([self openControlSocket]) {
         [self beginRTSPSession];
     }
+}
+
+- (void)netService:(NSNetService *)sender didNotPublish:(NSDictionary *)errorDict {
+    NSLog(@"RAOP: Bonjour publication failed for %@: %@", [sender name], errorDict);
+}
+
+- (void)netServiceDidPublish:(NSNetService *)sender {
+    NSLog(@"RAOP: Bonjour service published: %@", [sender name]);
 }
 
 - (void)play {

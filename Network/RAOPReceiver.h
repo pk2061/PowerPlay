@@ -3,8 +3,6 @@
 
 #if defined(__OBJC__)
 @class NSNetService;
-@class NSNetServiceBrowser;
-@protocol NSNetServiceBrowserDelegate;
 @protocol NSNetServiceDelegate;
 #endif
 
@@ -25,10 +23,11 @@ typedef unsigned long NSUInteger;
 #import "AirPlayMetadataParser.h"
 #import "CoreAudioPlayer.h"
 
-@interface RAOPReceiver : NSObject <NSNetServiceBrowserDelegate, NSNetServiceDelegate> {
-    NSNetServiceBrowser *serviceBrowser;
-    NSMutableArray *discoveredServices;
+@interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
+    NSNetService *publishedService;
     NSNetService *resolvedService;
+    int listenerSocket;
+    volatile BOOL acceptingRTSP;
     NSString *deviceName;
     NSString *currentTitle;
     NSData *coverArtData;
@@ -56,8 +55,9 @@ typedef unsigned long NSUInteger;
 }
 
 - (id)init;
-- (void)startBrowsing;
-- (void)stopBrowsing;
+- (void)startReceiver;
+- (void)stopReceiver;
+- (void)acceptRTSPConnections;
 - (void)connectToService:(NSNetService *)service;
 - (void)play;
 - (void)pause;
