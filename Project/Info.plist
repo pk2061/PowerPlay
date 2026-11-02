@@ -28,6 +28,8 @@
     <string>10.4</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © PowerPlay</string>
+    <key>NSMainNibFile</key>
+    <string>MainMenu</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>
