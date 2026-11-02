@@ -97,6 +97,7 @@
                 8D11071B0486CEB800E47090 /* Info.plist */,
                 8D11071C0486CEB800E47090 /* MainMenu.xib */,
                 8D1107480486CEB800E47090 /* MainMenu.nib */,
+                8D11074B0486CEB800E47090 /* RAOPPrivateKey.pem */,
                 8D11071D0486CEB800E47090 /* build.sh */,
             );
             path = Project;
@@ -171,6 +172,7 @@
                 8D1107400486CEB800E47090 /* AudioToolbox.framework in Frameworks */,
                 8D1107430486CEB800E47090 /* AudioUnit.framework in Frameworks */,
                 8D1107450486CEB800E47090 /* CoreServices.framework in Frameworks */,
+                A1B2C3D4E5F60718293A4B62 /* libcrypto.dylib in Frameworks */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
@@ -181,6 +183,7 @@
             files = (
                 8D1107410486CEB800E47090 /* Info.plist in Resources */,
                 8D1107490486CEB800E47090 /* MainMenu.nib in Resources */,
+                8D11074A0486CEB800E47090 /* RAOPPrivateKey.pem in Resources */,
                 8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
@@ -375,6 +378,12 @@
             path = MainMenu.nib;
             sourceTree = "<group>";
         };
+        8D11074B0486CEB800E47090 /* RAOPPrivateKey.pem */ = {
+            isa = PBXFileReference;
+            lastKnownFileType = text;
+            path = RAOPPrivateKey.pem;
+            sourceTree = "<group>";
+        };
         8D11071D0486CEB800E47090 /* build.sh */ = {
             isa = PBXFileReference;
             path = build.sh;
@@ -441,6 +450,10 @@
             isa = PBXBuildFile;
             fileRef = 8D1107480486CEB800E47090 /* MainMenu.nib */;
         };
+        8D11074A0486CEB800E47090 /* RAOPPrivateKey.pem in Resources */ = {
+            isa = PBXBuildFile;
+            fileRef = 8D11074B0486CEB800E47090 /* RAOPPrivateKey.pem */;
+        };
         8D1107430486CEB800E47090 /* AudioUnit.framework in Frameworks */ = {
             isa = PBXBuildFile;
             fileRef = 8D1107460486CEB800E47090 /* AudioUnit.framework */;
@@ -448,6 +461,10 @@
         8D1107450486CEB800E47090 /* CoreServices.framework in Frameworks */ = {
             isa = PBXBuildFile;
             fileRef = 8D1107470486CEB800E47090 /* CoreServices.framework */;
+        };
+        A1B2C3D4E5F60718293A4B62 /* libcrypto.dylib in Frameworks */ = {
+            isa = PBXBuildFile;
+            fileRef = A1B2C3D4E5F60718293A4B63 /* libcrypto.dylib */;
         };
         8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */ = {
             isa = PBXBuildFile;
@@ -483,6 +500,13 @@
             name = CoreServices.framework;
             path = "/System/Library/Frameworks/CoreServices.framework";
             sourceTree = SDKROOT;
+        };
+        A1B2C3D4E5F60718293A4B63 /* libcrypto.dylib */ = {
+            isa = PBXFileReference;
+            lastKnownFileType = "compiled.mach-o.dylib";
+            name = libcrypto.dylib;
+            path = /usr/lib/libcrypto.dylib;
+            sourceTree = "<absolute>";
         };
     };
     rootObject = 29B97313FDCFA39411CA2CEA;

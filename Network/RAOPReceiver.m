@@ -11,6 +11,16 @@
 #import <errno.h>
 #import <stdio.h>
 
+typedef struct bio_st PowerPlayBIO;
+typedef struct rsa_st PowerPlayRSA;
+
+extern PowerPlayBIO *BIO_new_file(const char *filename, const char *mode);
+extern PowerPlayRSA *PEM_read_bio_RSAPrivateKey(PowerPlayBIO *bio, PowerPlayRSA **rsa, void *callback, void *userData);
+extern int BIO_free(PowerPlayBIO *bio);
+extern int RSA_size(const PowerPlayRSA *rsa);
+extern int RSA_private_encrypt(int inputLength, const unsigned char *input, unsigned char *output, PowerPlayRSA *rsa, int padding);
+extern void RSA_free(PowerPlayRSA *rsa);
+
 static NSString *PowerPlayDeviceIdentifier(void) {
     struct ifaddrs *interfaces = NULL;
     struct ifaddrs *interface = NULL;
@@ -48,6 +58,151 @@ static NSString *PowerPlayDeviceIdentifier(void) {
         memcpy(deviceID, fallbackID, sizeof(deviceID));
     }
     return [NSString stringWithCString:deviceID encoding:NSASCIIStringEncoding];
+}
+
+static int PowerPlayBase64Value(unichar character) {
+    if (character >= 'A' && character <= 'Z') return (int)(character - 'A');
+    if (character >= 'a' && character <= 'z') return (int)(character - 'a') + 26;
+    if (character >= '0' && character <= '9') return (int)(character - '0') + 52;
+    if (character == '+') return 62;
+    if (character == '/') return 63;
+    return -1;
+}
+
+static NSData *PowerPlayDecodeBase64(NSString *encoded) {
+    if (encoded == nil || [encoded length] == 0) {
+        return nil;
+    }
+
+    NSMutableData *decoded = [NSMutableData data];
+    unsigned int accumulator = 0;
+    int bits = 0;
+    BOOL paddingStarted = NO;
+    NSUInteger i;
+    for (i = 0; i < [encoded length]; i++) {
+        unichar character = [encoded characterAtIndex:i];
+        if (character == '=') {
+            paddingStarted = YES;
+            continue;
+        }
+        if (paddingStarted) {
+            return nil;
+        }
+
+        int value = PowerPlayBase64Value(character);
+        if (value < 0) {
+            return nil;
+        }
+        accumulator = (accumulator << 6) | (unsigned int)value;
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            unsigned char byte = (unsigned char)((accumulator >> bits) & 0xFF);
+            [decoded appendBytes:&byte length:1];
+        }
+    }
+
+    if (bits >= 6 || (bits > 0 && (accumulator & ((1U << bits) - 1U)) != 0)) {
+        return nil;
+    }
+    return decoded;
+}
+
+static NSString *PowerPlayEncodeBase64WithoutPadding(const unsigned char *bytes, NSUInteger length) {
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    NSMutableString *encoded = [NSMutableString string];
+    NSUInteger i;
+    for (i = 0; i < length; i += 3) {
+        NSUInteger remaining = length - i;
+        unsigned int triple = (unsigned int)bytes[i] << 16;
+        if (remaining > 1) triple |= (unsigned int)bytes[i + 1] << 8;
+        if (remaining > 2) triple |= (unsigned int)bytes[i + 2];
+
+        [encoded appendFormat:@"%c%c", alphabet[(triple >> 18) & 0x3F], alphabet[(triple >> 12) & 0x3F]];
+        if (remaining > 1) [encoded appendFormat:@"%c", alphabet[(triple >> 6) & 0x3F]];
+        if (remaining > 2) [encoded appendFormat:@"%c", alphabet[triple & 0x3F]];
+    }
+    return encoded;
+}
+
+static int PowerPlayHexValue(unichar character) {
+    if (character >= '0' && character <= '9') return (int)(character - '0');
+    if (character >= 'A' && character <= 'F') return (int)(character - 'A') + 10;
+    if (character >= 'a' && character <= 'f') return (int)(character - 'a') + 10;
+    return -1;
+}
+
+static BOOL PowerPlayDecodeDeviceIdentifier(NSString *identifier, unsigned char bytes[6]) {
+    if (identifier == nil || [identifier length] != 12) {
+        return NO;
+    }
+
+    NSUInteger i;
+    for (i = 0; i < 6; i++) {
+        int high = PowerPlayHexValue([identifier characterAtIndex:i * 2]);
+        int low = PowerPlayHexValue([identifier characterAtIndex:i * 2 + 1]);
+        if (high < 0 || high > 15 || low < 0 || low > 15) {
+            return NO;
+        }
+        bytes[i] = (unsigned char)((high << 4) | low);
+    }
+    return YES;
+}
+
+static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, NSString *identifier) {
+    NSData *challengeData = PowerPlayDecodeBase64(challenge);
+    if (challengeData == nil || [challengeData length] > 16) {
+        return nil;
+    }
+
+    struct sockaddr_in localAddress;
+    socklen_t localLength = sizeof(localAddress);
+    memset(&localAddress, 0, sizeof(localAddress));
+    if (getsockname(socketHandle, (struct sockaddr *)&localAddress, &localLength) != 0 ||
+        localAddress.sin_family != AF_INET) {
+        return nil;
+    }
+
+    unsigned char identifierBytes[6];
+    if (!PowerPlayDecodeDeviceIdentifier(identifier, identifierBytes)) {
+        return nil;
+    }
+
+    unsigned char signedData[48];
+    memset(signedData, 0, sizeof(signedData));
+    NSUInteger signedLength = [challengeData length];
+    memcpy(signedData, [challengeData bytes], signedLength);
+    memcpy(signedData + signedLength, &localAddress.sin_addr.s_addr, sizeof(localAddress.sin_addr.s_addr));
+    signedLength += sizeof(localAddress.sin_addr.s_addr);
+    memcpy(signedData + signedLength, identifierBytes, sizeof(identifierBytes));
+    signedLength += sizeof(identifierBytes);
+    if (signedLength < 32) {
+        signedLength = 32;
+    }
+
+    NSString *keyPath = [[NSBundle mainBundle] pathForResource:@"RAOPPrivateKey" ofType:@"pem"];
+    PowerPlayBIO *keyFile = keyPath == nil ? NULL : BIO_new_file([keyPath fileSystemRepresentation], "r");
+    PowerPlayRSA *privateKey = keyFile == NULL ? NULL : PEM_read_bio_RSAPrivateKey(keyFile, NULL, NULL, NULL);
+    if (keyFile != NULL) {
+        BIO_free(keyFile);
+    }
+    if (privateKey == NULL) {
+        return nil;
+    }
+
+    int signatureCapacity = RSA_size(privateKey);
+    unsigned char *signature = (unsigned char *)malloc((size_t)signatureCapacity);
+    int signatureLength = signature == NULL ? -1 : RSA_private_encrypt(
+        (int)signedLength, signedData, signature, privateKey, 1);
+    RSA_free(privateKey);
+    if (signatureLength <= 0) {
+        free(signature);
+        return nil;
+    }
+
+    NSString *response = PowerPlayEncodeBase64WithoutPadding(signature, (NSUInteger)signatureLength);
+    free(signature);
+    return response;
 }
 
 static NSUInteger PowerPlayRTSPHeaderEnd(const unsigned char *bytes, NSUInteger length) {
@@ -186,6 +341,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     self = [super init];
     if (self != nil) {
         publishedService = nil;
+        deviceIdentifier = nil;
         listenerSocket = -1;
         rtpControlSocket = -1;
         acceptingRTSP = NO;
@@ -248,6 +404,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         rtpControlSocket = -1;
     }
     [publishedService release];
+    [deviceIdentifier release];
     [currentTitle release];
     [coverArtData release];
     [resolvedService release];
@@ -302,8 +459,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                              toTarget:self
                            withObject:nil];
 
-    NSString *deviceID = PowerPlayDeviceIdentifier();
-    NSString *serviceName = [NSString stringWithFormat:@"%@@PowerPlay", deviceID];
+    [deviceIdentifier release];
+    deviceIdentifier = [PowerPlayDeviceIdentifier() copy];
+    NSString *serviceName = [NSString stringWithFormat:@"%@@PowerPlay", deviceIdentifier];
     publishedService = [[NSNetService alloc] initWithDomain:@"local."
                                                         type:@"_raop._tcp."
                                                         name:serviceName
@@ -422,6 +580,16 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
         if ([method isEqualToString:@"OPTIONS"]) {
             responseHeaders = @"Public: OPTIONS, ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, SET_PARAMETER, GET_PARAMETER\r\n";
+            NSString *challenge = [headers objectForKey:@"apple-challenge"];
+            if (challenge != nil) {
+                NSString *appleResponse = PowerPlayAppleResponse(challenge, incomingSocket, deviceIdentifier);
+                if (appleResponse != nil) {
+                    responseHeaders = [responseHeaders stringByAppendingFormat:
+                        @"Apple-Response: %@\r\n", appleResponse];
+                } else {
+                    NSLog(@"RAOP: could not generate Apple-Response for the received challenge");
+                }
+            }
         } else if ([method isEqualToString:@"ANNOUNCE"]) {
             rtspSessionEstablished = YES;
         } else if ([method isEqualToString:@"SETUP"]) {

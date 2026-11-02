@@ -12,6 +12,7 @@
 		3DE22324307D55AD003F84A6 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE22323307D55AD003F84A6 /* AudioToolbox.framework */; };
 		3DE22328307D55C0003F84A6 /* CoreServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE22327307D55C0003F84A6 /* CoreServices.framework */; };
 		3DE2232E307D56C7003F84A6 /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE2232D307D56C7003F84A6 /* AudioUnit.framework */; };
+		A1B2C3D4E5F60718293A4B64 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B65 /* libcrypto.dylib */; };
 		8D1107300486CEB800E47090 /* AirPlayReceiverAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */; };
 		8D1107310486CEB800E47090 /* GrowlNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D11070F0486CEB800E47090 /* GrowlNotifier.m */; };
 		8D1107320486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D1107100486CEB800E47090 /* main.m */; };
@@ -23,6 +24,7 @@
 		8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */ = {isa = PBXBuildFile; fileRef = 8D11071E0486CEB800E47090 /* PowerPlay.icns */; };
 		8D1107410486CEB800E47090 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 8D11071B0486CEB800E47090 /* Info.plist */; };
 		A1B2C3D4E5F60718293A4B5D /* MainMenu.nib in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */; };
+		A1B2C3D4E5F60718293A4B60 /* RAOPPrivateKey.pem in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B61 /* RAOPPrivateKey.pem */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +34,7 @@
 		3DE22323307D55AD003F84A6 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = /System/Library/Frameworks/AudioToolbox.framework; sourceTree = "<absolute>"; };
 		3DE22327307D55C0003F84A6 /* CoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreServices.framework; path = /System/Library/Frameworks/CoreServices.framework; sourceTree = "<absolute>"; };
 		3DE2232D307D56C7003F84A6 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = /System/Library/Frameworks/AudioUnit.framework; sourceTree = "<absolute>"; };
+		A1B2C3D4E5F60718293A4B65 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/lib/libcrypto.dylib; sourceTree = "<absolute>"; };
 		8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AirPlayReceiverAppDelegate.h; sourceTree = "<group>"; };
 		8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AirPlayReceiverAppDelegate.m; sourceTree = "<group>"; };
 		8D11070E0486CEB800E47090 /* GrowlNotifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowlNotifier.h; sourceTree = "<group>"; };
@@ -50,6 +53,7 @@
 		8D11071B0486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D11071C0486CEB800E47090 /* MainMenu.xib */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.xib; path = MainMenu.xib; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; path = MainMenu.nib; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B61 /* RAOPPrivateKey.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = RAOPPrivateKey.pem; sourceTree = "<group>"; };
 		8D11071D0486CEB800E47090 /* build.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = build.sh; sourceTree = "<group>"; };
 		8D11071E0486CEB800E47090 /* PowerPlay.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = PowerPlay.icns; sourceTree = "<group>"; };
 		8D11072F0486CEB800E47090 /* PowerPlay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerPlay.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,6 +69,7 @@
 				3DE22324307D55AD003F84A6 /* AudioToolbox.framework in Frameworks */,
 				3DE22328307D55C0003F84A6 /* CoreServices.framework in Frameworks */,
 				3DE2232E307D56C7003F84A6 /* AudioUnit.framework in Frameworks */,
+				A1B2C3D4E5F60718293A4B64 /* libcrypto.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +153,7 @@
 				8D11071B0486CEB800E47090 /* Info.plist */,
 				8D11071C0486CEB800E47090 /* MainMenu.xib */,
 				A1B2C3D4E5F60718293A4B5C /* MainMenu.nib */,
+				A1B2C3D4E5F60718293A4B61 /* RAOPPrivateKey.pem */,
 				8D11071D0486CEB800E47090 /* build.sh */,
 			);
 			path = Project;
@@ -223,6 +229,7 @@
 			files = (
 				8D1107410486CEB800E47090 /* Info.plist in Resources */,
 				A1B2C3D4E5F60718293A4B5D /* MainMenu.nib in Resources */,
+				A1B2C3D4E5F60718293A4B60 /* RAOPPrivateKey.pem in Resources */,
 				8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

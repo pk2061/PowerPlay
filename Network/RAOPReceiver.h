@@ -26,6 +26,7 @@ typedef unsigned long NSUInteger;
 @interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
     NSNetService *publishedService;
     NSNetService *resolvedService;
+    NSString *deviceIdentifier;
     int listenerSocket;
     int rtpControlSocket;
     volatile BOOL acceptingRTSP;
