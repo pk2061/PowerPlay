@@ -418,6 +418,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         NSString *responseHeaders = @"";
 
         NSLog(@"RAOP: received RTSP request: %@", requestLine);
+        NSLog(@"RAOP: RTSP request headers: %@", headers);
 
         if ([method isEqualToString:@"OPTIONS"]) {
             responseHeaders = @"Public: OPTIONS, ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, SET_PARAMETER, GET_PARAMETER\r\n";
