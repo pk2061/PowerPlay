@@ -314,6 +314,11 @@ static void PowerPlaySendRTSPResponse(int socketHandle, NSString *response) {
     }
 }
 
+static void PowerPlayLogAndSendRTSPResponse(int socketHandle, NSString *response) {
+    NSLog(@"RAOP: sending RTSP response:\n%@", response);
+    PowerPlaySendRTSPResponse(socketHandle, response);
+}
+
 static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName) {
     if (transport == nil || portName == nil) {
         return 0;
@@ -574,6 +579,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         NSString *transport = [headers objectForKey:@"transport"];
         NSString *status = @"200 OK";
         NSString *responseHeaders = @"";
+        NSString *responseBody = nil;
+        NSString *contentType = nil;
 
         NSLog(@"RAOP: received RTSP request: %@", requestLine);
         NSLog(@"RAOP: RTSP request headers: %@", headers);
@@ -592,6 +599,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             }
         } else if ([method isEqualToString:@"ANNOUNCE"]) {
             rtspSessionEstablished = YES;
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
         } else if ([method isEqualToString:@"SETUP"]) {
             if (!rtspSessionEstablished) {
                 status = @"455 Method Not Valid in This State";
@@ -627,7 +635,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                     [metadata setObject:[NSNumber numberWithInt:(int)senderControlPort] forKey:@"sender_control_port"];
                     [metadata setObject:[NSNumber numberWithInt:(int)senderTimingPort] forKey:@"sender_timing_port"];
                     responseHeaders = [NSString stringWithFormat:
-                        @"Session: %@\r\nTransport: RTP/AVP/UDP;unicast;mode=record;server_port=%ld;control_port=%ld;timing_port=%ld\r\n",
+                        @"Session: %@;timeout=60\r\nTransport: RTP/AVP/UDP;unicast;mode=record;server_port=%ld;control_port=%ld;timing_port=%ld\r\n",
                         rtspSessionId, (long)audioPort, (long)rtpControlPort, (long)timingPort];
                 }
             }
@@ -637,31 +645,45 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             } else {
                 isPlaying = YES;
                 [audioPlayer start];
-                responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+                responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             }
         } else if ([method isEqualToString:@"PAUSE"]) {
             isPlaying = NO;
             [audioPlayer stop];
-            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
         } else if ([method isEqualToString:@"TEARDOWN"]) {
             isPlaying = NO;
             isSetupComplete = NO;
             rtpSessionReady = NO;
             rtspSessionEstablished = NO;
             [audioPlayer stop];
-            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
         } else if ([method isEqualToString:@"FLUSH"] ||
-                   [method isEqualToString:@"SET_PARAMETER"] ||
-                   [method isEqualToString:@"GET_PARAMETER"]) {
-            responseHeaders = [NSString stringWithFormat:@"Session: %@\r\n", rtspSessionId];
+                   [method isEqualToString:@"SET_PARAMETER"]) {
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
+            contentType = @"text/parameters";
+            responseBody = @"";
+        } else if ([method isEqualToString:@"GET_PARAMETER"]) {
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\nContent-Type: text/parameters\r\n", rtspSessionId];
+            contentType = @"text/parameters";
+            responseBody = @"";
         } else {
             status = @"501 Not Implemented";
         }
 
+        NSMutableString *headerBlock = [NSMutableString stringWithString:responseHeaders];
+        if (contentType != nil || responseBody != nil) {
+            NSUInteger bodyLength = responseBody == nil ? 0 : [responseBody lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+            if (contentType != nil) {
+                [headerBlock appendFormat:@"Content-Type: %@\r\n", contentType];
+            }
+            [headerBlock appendFormat:@"Content-Length: %lu\r\n", (unsigned long)bodyLength];
+        }
+
         NSString *response = [NSString stringWithFormat:
-            @"RTSP/1.0 %@\r\nCSeq: %@\r\n%@Server: PowerPlay/1.0\r\n\r\n",
-            status, cseq, responseHeaders];
-        PowerPlaySendRTSPResponse(incomingSocket, response);
+            @"RTSP/1.0 %@\r\nCSeq: %@\r\n%@Server: PowerPlay/1.0\r\n\r\n%@",
+            status, cseq, headerBlock, responseBody == nil ? @"" : responseBody];
+        PowerPlayLogAndSendRTSPResponse(incomingSocket, response);
 
         if ([method isEqualToString:@"TEARDOWN"] ||
             [status hasPrefix:@"455"] || [status hasPrefix:@"461"] || [status hasPrefix:@"500"]) {
