@@ -314,8 +314,65 @@ static void PowerPlaySendRTSPResponse(int socketHandle, NSString *response) {
     }
 }
 
+static NSString *PowerPlayRTSPHeaderValue(NSString *response, NSString *headerName) {
+    if (response == nil || headerName == nil || [headerName length] == 0) {
+        return nil;
+    }
+
+    NSArray *lines = [response componentsSeparatedByString:@"\r\n"];
+    NSUInteger i;
+    for (i = 0; i < [lines count]; i++) {
+        NSString *line = [lines objectAtIndex:i];
+        if ([line length] == 0) {
+            continue;
+        }
+        NSRange colon = [line rangeOfString:@":"];
+        if (colon.location == NSNotFound) {
+            continue;
+        }
+        NSString *key = [[line substringToIndex:colon.location]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSString *value = [[line substringFromIndex:colon.location + 1]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([[key lowercaseString] isEqualToString:[headerName lowercaseString]]) {
+            return value;
+        }
+    }
+    return nil;
+}
+
 static void PowerPlayLogAndSendRTSPResponse(int socketHandle, NSString *response) {
-    NSLog(@"RAOP: sending RTSP response:\n%@", response);
+    if (response == nil || [response length] == 0) {
+        NSLog(@"RAOP: sending empty RTSP response");
+        return;
+    }
+
+    NSArray *responseLines = [response componentsSeparatedByString:@"\r\n"];
+    NSString *statusLine = [responseLines count] > 0 ? [responseLines objectAtIndex:0] : @"";
+    NSString *cseq = PowerPlayRTSPHeaderValue(response, @"CSeq");
+    NSString *session = PowerPlayRTSPHeaderValue(response, @"Session");
+    NSString *transport = PowerPlayRTSPHeaderValue(response, @"Transport");
+    NSString *contentType = PowerPlayRTSPHeaderValue(response, @"Content-Type");
+    NSString *contentLength = PowerPlayRTSPHeaderValue(response, @"Content-Length");
+
+    NSString *body = nil;
+    NSRange split = [response rangeOfString:@"\r\n\r\n"];
+    if (split.location != NSNotFound && split.location + split.length < [response length]) {
+        body = [response substringFromIndex:(split.location + split.length)];
+    }
+
+    NSUInteger bodyLength = body == nil ? 0 : [body lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+
+    NSLog(@"RAOP: raw RTSP response:\n%@", response);
+    NSLog(@"RAOP: RTSP response summary: status=%@ cseq=%@ session=%@ transport=%@ content-type=%@ content-length=%@ body-bytes=%lu",
+          statusLine,
+          cseq == nil ? @"<none>" : cseq,
+          session == nil ? @"<none>" : session,
+          transport == nil ? @"<none>" : transport,
+          contentType == nil ? @"<none>" : contentType,
+          contentLength == nil ? @"<none>" : contentLength,
+          (unsigned long)bodyLength);
+
     PowerPlaySendRTSPResponse(socketHandle, response);
 }
 
