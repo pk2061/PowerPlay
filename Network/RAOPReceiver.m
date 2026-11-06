@@ -721,7 +721,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             contentType = @"text/parameters";
             responseBody = @"";
         } else if ([method isEqualToString:@"GET_PARAMETER"]) {
-            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\nContent-Type: text/parameters\r\n", rtspSessionId];
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             contentType = @"text/parameters";
             responseBody = @"";
         } else {
