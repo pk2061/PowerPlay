@@ -628,6 +628,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
         NSString *method = [[requestParts objectAtIndex:0] uppercaseString];
         NSDictionary *headers = [request objectForKey:@"headers"];
+        NSData *requestBodyData = [request objectForKey:@"body"];
+        NSString *requestBodyText = requestBodyData == nil ? @"" : [[[NSString alloc] initWithData:requestBodyData encoding:NSUTF8StringEncoding] autorelease];
+        NSString *requestParameter = requestBodyText == nil ? @"" : [requestBodyText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         NSString *cseq = [headers objectForKey:@"cseq"];
         if (cseq == nil) {
             cseq = @"1";
@@ -641,6 +644,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
         NSLog(@"RAOP: received RTSP request: %@", requestLine);
         NSLog(@"RAOP: RTSP request headers: %@", headers);
+        if ([requestParameter length] > 0) {
+            NSLog(@"RAOP: RTSP request parameter body: %@", requestParameter);
+        }
 
         if ([method isEqualToString:@"OPTIONS"]) {
             responseHeaders = @"Public: OPTIONS, ANNOUNCE, SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, SET_PARAMETER, GET_PARAMETER\r\n";
@@ -719,11 +725,37 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                    [method isEqualToString:@"SET_PARAMETER"]) {
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             contentType = @"text/parameters";
-            responseBody = @"";
+            if ([requestParameter length] > 0) {
+                if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    NSArray *parts = [requestParameter componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    NSString *newValue = [parts count] > 1 ? [parts objectAtIndex:1] : nil;
+                    if (newValue != nil && [newValue length] > 0) {
+                        float parsedVolume = [newValue floatValue];
+                        if (parsedVolume >= 0.0f && parsedVolume <= 1.0f) {
+                            volume = parsedVolume;
+                        }
+                    }
+                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+                } else {
+                    responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
+                }
+            } else {
+                responseBody = @"";
+            }
         } else if ([method isEqualToString:@"GET_PARAMETER"]) {
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             contentType = @"text/parameters";
-            responseBody = @"";
+            if ([requestParameter length] > 0) {
+                if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+                } else if ([requestParameter rangeOfString:@"position" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    responseBody = @"position: 0.000000\r\n";
+                } else {
+                    responseBody = [NSString stringWithFormat:@"%@: %@\r\n", requestParameter, @""];
+                }
+            } else {
+                responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+            }
         } else {
             status = @"501 Not Implemented";
         }
