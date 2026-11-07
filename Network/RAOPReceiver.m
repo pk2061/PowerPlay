@@ -2335,54 +2335,71 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (NSString *)currentTitle {
+    NSString *title = nil;
     @synchronized(self) {
         if (currentTitle == nil || [currentTitle length] == 0) {
-            return [[trackName retain] autorelease];
+            title = [trackName retain];
+        } else {
+            title = [currentTitle retain];
         }
-        return [[currentTitle retain] autorelease];
     }
+    return [title autorelease];
 }
 
 - (NSString *)artistName {
+    NSString *value = nil;
     @synchronized(self) {
-        return [[artistName retain] autorelease];
+        value = [artistName retain];
     }
+    return [value autorelease];
 }
 
 - (NSString *)albumName {
+    NSString *value = nil;
     @synchronized(self) {
-        return [[albumName retain] autorelease];
+        value = [albumName retain];
     }
+    return [value autorelease];
 }
 
 - (NSString *)trackName {
+    NSString *value = nil;
     @synchronized(self) {
-        return [[trackName retain] autorelease];
+        value = [trackName retain];
     }
+    return [value autorelease];
 }
 
 - (float)volumeValue {
+    float value;
     @synchronized(self) {
-        return volume;
+        value = volume;
     }
+    return value;
 }
 
 - (double)elapsedPlaybackTimeValue {
+    double value;
     @synchronized(self) {
-        return elapsedPlaybackTime;
+        value = elapsedPlaybackTime;
     }
+    return value;
 }
 
 - (double)trackDurationValue {
+    double value;
     @synchronized(self) {
-        return trackDuration;
+        value = trackDuration;
     }
+    return value;
 }
 
 - (NSData *)coverArtData {
+    NSData *value = nil;
     @synchronized(self) {
-        return [[coverArtData retain] autorelease];
+        value = [coverArtData retain];
     }
+    return [value autorelease];
 }
 
 - (BOOL)isPlaying {
