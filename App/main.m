@@ -7,6 +7,7 @@ int main(int argc, char *argv[]) {
     AirPlayReceiverAppDelegate *delegate = [[AirPlayReceiverAppDelegate alloc] init];
     [NSApp setDelegate:delegate];
     [NSApp run];
+    NSLog(@"PowerPlay: NSApplication run returned");
     [delegate release];
     [pool release];
     return 0;

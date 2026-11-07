@@ -4,6 +4,7 @@
 @implementation AirPlayReceiverAppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+    NSLog(@"PowerPlay: applicationDidFinishLaunching");
     [self installApplicationMenu];
     receiver = [[RAOPReceiver alloc] init];
     growlNotifier = [[GrowlNotifier alloc] init];
@@ -218,6 +219,7 @@
 }
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
+    NSLog(@"PowerPlay: applicationWillTerminate");
     [receiver stopReceiver];
     [growlNotifier release];
     [lastGrowlTitle release];
