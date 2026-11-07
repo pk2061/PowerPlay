@@ -418,6 +418,9 @@ static NSUInteger PowerPlayRTSPHeaderEnd(const unsigned char *bytes, NSUInteger 
     return NSNotFound;
 }
 
+static const NSUInteger PowerPlayMaximumRTSPHeaderBytes = 65536;
+static const NSUInteger PowerPlayMaximumRTSPBodyBytes = 8 * 1024 * 1024;
+
 static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
     NSMutableData *buffer = [NSMutableData data];
     unsigned char chunk[4096];
@@ -452,7 +455,7 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                         NSString *value = [[line substringFromIndex:colon.location + 1]
                             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                         int lengthValue = [value intValue];
-                        if (lengthValue < 0 || lengthValue > 65536) {
+                        if (lengthValue < 0 || (NSUInteger)lengthValue > PowerPlayMaximumRTSPBodyBytes) {
                             NSLog(@"RAOP: rejected RTSP Content-Length value: %@", value);
                             return nil;
                         }
@@ -464,8 +467,9 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                 if (!haveContentLength) {
                     contentLength = 0;
                 }
-            } else if ([buffer length] > 65536) {
-                NSLog(@"RAOP: rejected RTSP header larger than 65536 bytes");
+            } else if ([buffer length] > PowerPlayMaximumRTSPHeaderBytes) {
+                NSLog(@"RAOP: rejected RTSP header larger than %lu bytes",
+                      (unsigned long)PowerPlayMaximumRTSPHeaderBytes);
                 return nil;
             }
         }
@@ -506,8 +510,10 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
             return nil;
         }
         [buffer appendBytes:chunk length:(NSUInteger)received];
-        if ([buffer length] > 131072) {
-            NSLog(@"RAOP: rejected RTSP request larger than 131072 bytes");
+        NSUInteger maximumRequestBytes = PowerPlayMaximumRTSPHeaderBytes + 4 + PowerPlayMaximumRTSPBodyBytes;
+        if ([buffer length] > maximumRequestBytes) {
+            NSLog(@"RAOP: rejected RTSP request larger than %lu bytes",
+                  (unsigned long)maximumRequestBytes);
             return nil;
         }
     }
