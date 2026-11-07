@@ -5,6 +5,7 @@ typedef struct {
     NSData *packetData;
     UInt32 channels;
     BOOL suppliedPacket;
+    AudioStreamPacketDescription packetDescription;
 } PowerPlayALACInput;
 
 static OSStatus PowerPlayALACInputProc(AudioConverterRef converter,
@@ -32,10 +33,15 @@ static OSStatus PowerPlayALACInputProc(AudioConverterRef converter,
     inputData->mBuffers[0].mNumberChannels = input->channels;
     inputData->mBuffers[0].mDataByteSize = (UInt32)packetLength;
     inputData->mBuffers[0].mData = (void *)[input->packetData bytes];
-    if (packetDescriptions != NULL && *packetDescriptions != NULL) {
-        (*packetDescriptions)[0].mStartOffset = 0;
-        (*packetDescriptions)[0].mVariableFramesInPacket = 0;
-        (*packetDescriptions)[0].mDataByteSize = (UInt32)packetLength;
+    input->packetDescription.mStartOffset = 0;
+    input->packetDescription.mVariableFramesInPacket = 0;
+    input->packetDescription.mDataByteSize = (UInt32)packetLength;
+    if (packetDescriptions != NULL) {
+        if (*packetDescriptions == NULL) {
+            *packetDescriptions = &input->packetDescription;
+        } else {
+            (*packetDescriptions)[0] = input->packetDescription;
+        }
     }
 
     *packetCount = 1;
