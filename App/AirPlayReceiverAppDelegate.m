@@ -15,6 +15,10 @@
                                                                                              selector:@selector(receiverMetadataDidChange:)
                                                                                                      name:PowerPlayVolumeDidChangeNotification
                                                                                                  object:receiver];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                                                             selector:@selector(receiverMetadataDidChange:)
+                                                                                                     name:PowerPlayPlaybackProgressDidChangeNotification
+                                                                                                 object:receiver];
     growlNotifier = [[GrowlNotifier alloc] init];
     lastGrowlTitle = nil;
     [self buildUI];
@@ -106,6 +110,24 @@
     [albumText setStringValue:@"Current Track"];
     [content addSubview:albumText];
 
+    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(220, 141, 230, 14)];
+    [playbackProgress setStyle:NSProgressIndicatorBarStyle];
+    [playbackProgress setIndeterminate:NO];
+    [playbackProgress setMinValue:0.0];
+    [playbackProgress setMaxValue:1.0];
+    [playbackProgress setDoubleValue:0.0];
+    [content addSubview:playbackProgress];
+
+    playbackTimeText = [[NSTextField alloc] initWithFrame:NSMakeRect(458, 139, 62, 18)];
+    [playbackTimeText setEditable:NO];
+    [playbackTimeText setBordered:NO];
+    [playbackTimeText setDrawsBackground:NO];
+    [playbackTimeText setFont:[NSFont systemFontOfSize:10]];
+    [playbackTimeText setTextColor:[NSColor grayColor]];
+    [playbackTimeText setAlignment:NSRightTextAlignment];
+    [playbackTimeText setStringValue:@"0:00 / --:--"];
+    [content addSubview:playbackTimeText];
+
     statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 300, 22)];
     [statusText setEditable:NO];
     [statusText setBordered:NO];
@@ -195,6 +217,19 @@
     [artistText setStringValue:artist];
     [albumText setStringValue:album];
 
+    double elapsed = [receiver elapsedPlaybackTimeValue];
+    double duration = [receiver trackDurationValue];
+    unsigned long elapsedSeconds = elapsed > 0.0 ? (unsigned long)elapsed : 0;
+    unsigned long durationSeconds = duration > 0.0 ? (unsigned long)duration : 0;
+    NSString *durationText = durationSeconds > 0 ?
+        [NSString stringWithFormat:@"%lu:%02lu", durationSeconds / 60, durationSeconds % 60] : @"--:--";
+    [playbackTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu / %@",
+        elapsedSeconds / 60, elapsedSeconds % 60, durationText]];
+    double progress = duration > 0.0 ? elapsed / duration : 0.0;
+    if (progress < 0.0) progress = 0.0;
+    if (progress > 1.0) progress = 1.0;
+    [playbackProgress setDoubleValue:progress];
+
     if ([receiver isPlaying]) {
         [statusText setStringValue:@"Playing via AirPlay"];
         [playPauseButton setTitle:@"Pause"];
@@ -240,6 +275,9 @@
                                                                                                     object:receiver];
         [[NSNotificationCenter defaultCenter] removeObserver:self
                                                                                                         name:PowerPlayVolumeDidChangeNotification
+                                                                                                    object:receiver];
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                                                                        name:PowerPlayPlaybackProgressDidChangeNotification
                                                                                                     object:receiver];
     [receiver stopReceiver];
     [growlNotifier release];

@@ -13,9 +13,11 @@
 #import <errno.h>
 #import <stdio.h>
 #import <math.h>
+#import <stdlib.h>
 
 NSString * const PowerPlayMetadataDidChangeNotification = @"PowerPlayMetadataDidChangeNotification";
 NSString * const PowerPlayVolumeDidChangeNotification = @"PowerPlayVolumeDidChangeNotification";
+NSString * const PowerPlayPlaybackProgressDidChangeNotification = @"PowerPlayPlaybackProgressDidChangeNotification";
 
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
@@ -48,6 +50,25 @@ static float PowerPlayDecibelsFromLinearGain(float gain) {
         return 0.0f;
     }
     return 20.0f * log10f(gain);
+}
+
+static BOOL PowerPlayParseUInt32(NSString *string, uint32_t *value) {
+    if (string == nil || value == NULL) {
+        return NO;
+    }
+
+    const char *start = [string UTF8String];
+    if (start == NULL || *start == '\0') {
+        return NO;
+    }
+    errno = 0;
+    char *end = NULL;
+    unsigned long parsedValue = strtoul(start, &end, 10);
+    if (end == start || *end != '\0' || errno == ERANGE || parsedValue > 0xFFFFFFFFUL) {
+        return NO;
+    }
+    *value = (uint32_t)parsedValue;
+    return YES;
 }
 
 static void PowerPlayWriteNTPTime(unsigned char *bytes) {
@@ -633,6 +654,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         coverArtData = nil;
         isPlaying = NO;
         volume = 0.5f;
+        elapsedPlaybackTime = 0.0;
+        trackDuration = 0.0;
         controlPort = 5000;
         audioPort = 6000;
         timingPort = 6002;
@@ -1028,6 +1051,36 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                         }
                         responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
                             PowerPlayDecibelsFromLinearGain([self volumeValue])];
+                    } else if ([requestParameter hasPrefix:@"progress:"]) {
+                        NSString *progressValue = [[requestParameter substringFromIndex:[@"progress:" length]]
+                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        NSArray *timestamps = [progressValue componentsSeparatedByString:@"/"];
+                        uint32_t startTimestamp = 0;
+                        uint32_t currentTimestamp = 0;
+                        uint32_t endTimestamp = 0;
+                        if ([timestamps count] == 3 &&
+                            PowerPlayParseUInt32([[timestamps objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &startTimestamp) &&
+                            PowerPlayParseUInt32([[timestamps objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &currentTimestamp) &&
+                            PowerPlayParseUInt32([[timestamps objectAtIndex:2] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &endTimestamp)) {
+                            uint32_t durationFrames = endTimestamp - startTimestamp;
+                            uint32_t elapsedFrames = currentTimestamp - startTimestamp;
+                            if (durationFrames > 0 && elapsedFrames <= durationFrames) {
+                                double newDuration = (double)durationFrames / 44100.0;
+                                double newElapsed = (double)elapsedFrames / 44100.0;
+                                BOOL progressChanged;
+                                @synchronized(self) {
+                                    progressChanged = fabs(elapsedPlaybackTime - newElapsed) >= 0.05 ||
+                                                      fabs(trackDuration - newDuration) >= 0.05;
+                                    elapsedPlaybackTime = newElapsed;
+                                    trackDuration = newDuration;
+                                }
+                                if (progressChanged) {
+                                    [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayPlaybackProgressDidChangeNotification
+                                                                                        object:self];
+                                }
+                            }
+                        }
+                        responseBody = @"";
                     } else {
                         responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
                     }
@@ -1838,6 +1891,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             currentTitle = [newTitle copy];
             changed = YES;
             titleChanged = YES;
+            elapsedPlaybackTime = 0.0;
+            trackDuration = 0.0;
         }
         if ([newArtist isKindOfClass:[NSString class]] && [newArtist length] > 0 &&
             ![newArtist isEqualToString:artistName]) {
@@ -2309,6 +2364,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (float)volumeValue {
     @synchronized(self) {
         return volume;
+    }
+}
+
+- (double)elapsedPlaybackTimeValue {
+    @synchronized(self) {
+        return elapsedPlaybackTime;
+    }
+}
+
+- (double)trackDurationValue {
+    @synchronized(self) {
+        return trackDuration;
     }
 }
 

@@ -25,6 +25,7 @@ typedef unsigned long NSUInteger;
 
 extern NSString * const PowerPlayMetadataDidChangeNotification;
 extern NSString * const PowerPlayVolumeDidChangeNotification;
+extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
 
 @interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
     NSNetService *publishedService;
@@ -38,6 +39,8 @@ extern NSString * const PowerPlayVolumeDidChangeNotification;
     NSData *coverArtData;
     BOOL isPlaying;
     float volume;
+    double elapsedPlaybackTime;
+    double trackDuration;
     NSString *rtspSessionId;
     NSString *hostAddress;
     NSInteger controlPort;
@@ -101,6 +104,8 @@ extern NSString * const PowerPlayVolumeDidChangeNotification;
 - (NSString *)albumName;
 - (NSString *)trackName;
 - (float)volumeValue;
+- (double)elapsedPlaybackTimeValue;
+- (double)trackDurationValue;
 - (NSData *)coverArtData;
 - (BOOL)isPlaying;
 - (BOOL)isConnected;

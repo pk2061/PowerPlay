@@ -17,7 +17,9 @@
     NSTextField *titleText;
     NSTextField *artistText;
     NSTextField *albumText;
+    NSTextField *playbackTimeText;
     NSTextField *statusText;
+    NSProgressIndicator *playbackProgress;
     CoverArtView *coverView;
     RAOPReceiver *receiver;
     GrowlNotifier *growlNotifier;
