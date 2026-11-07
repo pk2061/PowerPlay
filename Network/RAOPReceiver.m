@@ -493,6 +493,13 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
 
         ssize_t received = recv(socketHandle, chunk, sizeof(chunk), 0);
         if (received <= 0) {
+            if (received == 0) {
+                NSLog(@"RAOP: RTSP peer closed the connection");
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT) {
+                NSLog(@"RAOP: RTSP request read timed out (%d)", errno);
+            } else {
+                NSLog(@"RAOP: RTSP request read failed (%d)", errno);
+            }
             return nil;
         }
         [buffer appendBytes:chunk length:(NSUInteger)received];
@@ -835,12 +842,15 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     while (acceptingRTSP) {
         NSDictionary *request = PowerPlayReadRTSPRequest(incomingSocket);
         if (request == nil) {
+            NSLog(@"RAOP: ending RTSP connection loop (setup=%d playing=%d)",
+                  isSetupComplete, isPlaying);
             break;
         }
 
         NSString *requestLine = [request objectForKey:@"requestLine"];
         NSArray *requestParts = [requestLine componentsSeparatedByString:@" "];
         if ([requestParts count] < 2) {
+            NSLog(@"RAOP: ending RTSP connection on malformed request line: %@", requestLine);
             break;
         }
         NSString *method = [[requestParts objectAtIndex:0] uppercaseString];
@@ -1338,6 +1348,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     unsigned long decryptFailureCount = 0;
     unsigned long decryptedPacketCount = 0;
     unsigned long decodedPacketCount = 0;
+    uint64_t lastAudioPacketMicros = 0;
+    BOOL loggedAudioSilence = NO;
     NSLog(@"RAOP: audio RTP receiver started");
 
     while (acceptingRTSP) {
@@ -1369,7 +1381,20 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             usleep(100000);
             continue;
         }
-        if (ready == 0 || !FD_ISSET(socketHandle, &readSockets) ||
+        if (ready == 0) {
+            if (isPlaying && isSetupComplete && lastAudioPacketMicros != 0 && !loggedAudioSilence) {
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                uint64_t nowMicros = (uint64_t)now.tv_sec * 1000000ULL + (uint64_t)now.tv_usec;
+                if (nowMicros - lastAudioPacketMicros >= 3000000ULL) {
+                    NSLog(@"RAOP: no audio RTP datagrams for 3 seconds (received=%lu decrypted=%lu decoded=%lu)",
+                          packetCount, decryptedPacketCount, decodedPacketCount);
+                    loggedAudioSilence = YES;
+                }
+            }
+            continue;
+        }
+        if (!FD_ISSET(socketHandle, &readSockets) ||
             socketHandle != audioSocket || !isSetupComplete) {
             continue;
         }
@@ -1381,6 +1406,10 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                     (struct sockaddr *)&sender, &senderLength);
         if (received > 0) {
             packetCount++;
+            struct timeval packetTime;
+            gettimeofday(&packetTime, NULL);
+            lastAudioPacketMicros = (uint64_t)packetTime.tv_sec * 1000000ULL + (uint64_t)packetTime.tv_usec;
+            loggedAudioSilence = NO;
             NSData *packet = [NSData dataWithBytes:packetBuffer length:(NSUInteger)received];
             NSRange payloadRange;
             BOOL validRTPHeader = [self validateRTPPacket:packet];
