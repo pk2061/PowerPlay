@@ -436,6 +436,7 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                                                        length:headerEnd
                                                      encoding:NSASCIIStringEncoding] autorelease];
                 if (headerText == nil) {
+                    NSLog(@"RAOP: rejected RTSP headers that are not valid ASCII");
                     return nil;
                 }
                 headerLines = [headerText componentsSeparatedByString:@"\r\n"];
@@ -452,6 +453,7 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                         int lengthValue = [value intValue];
                         if (lengthValue < 0 || lengthValue > 65536) {
+                            NSLog(@"RAOP: rejected RTSP Content-Length value: %@", value);
                             return nil;
                         }
                         contentLength = (NSUInteger)lengthValue;
@@ -463,6 +465,7 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                     contentLength = 0;
                 }
             } else if ([buffer length] > 65536) {
+                NSLog(@"RAOP: rejected RTSP header larger than 65536 bytes");
                 return nil;
             }
         }
@@ -504,6 +507,7 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
         }
         [buffer appendBytes:chunk length:(NSUInteger)received];
         if ([buffer length] > 131072) {
+            NSLog(@"RAOP: rejected RTSP request larger than 131072 bytes");
             return nil;
         }
     }
@@ -839,11 +843,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     rtpSessionReady = NO;
     isPlaying = NO;
 
+    NSString *lastRTSPRequest = @"<none>";
     while (acceptingRTSP) {
         NSDictionary *request = PowerPlayReadRTSPRequest(incomingSocket);
         if (request == nil) {
-            NSLog(@"RAOP: ending RTSP connection loop (setup=%d playing=%d)",
-                  isSetupComplete, isPlaying);
+            NSLog(@"RAOP: ending RTSP connection loop after %@ (setup=%d playing=%d)",
+                  lastRTSPRequest, isSetupComplete, isPlaying);
             break;
         }
 
@@ -862,6 +867,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         if (cseq == nil) {
             cseq = @"1";
         }
+        lastRTSPRequest = [NSString stringWithFormat:@"%@ CSeq %@", method, cseq];
         NSString *sessionHeader = [headers objectForKey:@"session"];
         NSString *transport = [headers objectForKey:@"transport"];
         NSString *status = @"200 OK";
