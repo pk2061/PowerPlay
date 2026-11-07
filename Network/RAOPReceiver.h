@@ -52,6 +52,8 @@ typedef unsigned long NSUInteger;
     NSString *albumName;
     NSString *trackName;
     NSMutableDictionary *metadata;
+    NSData *audioAESKey;
+    NSData *audioAESIV;
     ALACDecoder *alacDecoder;
     AirPlayMetadataParser *metadataParser;
     CoreAudioPlayer *audioPlayer;

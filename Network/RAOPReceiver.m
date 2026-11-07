@@ -20,6 +20,7 @@ extern PowerPlayRSA *PEM_read_bio_RSAPrivateKey(PowerPlayBIO *bio, PowerPlayRSA 
 extern int BIO_free(PowerPlayBIO *bio);
 extern int RSA_size(const PowerPlayRSA *rsa);
 extern int RSA_private_encrypt(int inputLength, const unsigned char *input, unsigned char *output, PowerPlayRSA *rsa, int padding);
+extern int RSA_private_decrypt(int inputLength, const unsigned char *input, unsigned char *output, PowerPlayRSA *rsa, int padding);
 extern void RSA_free(PowerPlayRSA *rsa);
 
 static NSString *PowerPlayDeviceIdentifier(void) {
@@ -150,6 +151,16 @@ static BOOL PowerPlayDecodeDeviceIdentifier(NSString *identifier, unsigned char 
     return YES;
 }
 
+static PowerPlayRSA *PowerPlayLoadPrivateKey(void) {
+    NSString *keyPath = [[NSBundle mainBundle] pathForResource:@"RAOPPrivateKey" ofType:@"pem"];
+    PowerPlayBIO *keyFile = keyPath == nil ? NULL : BIO_new_file([keyPath fileSystemRepresentation], "r");
+    PowerPlayRSA *privateKey = keyFile == NULL ? NULL : PEM_read_bio_RSAPrivateKey(keyFile, NULL, NULL, NULL);
+    if (keyFile != NULL) {
+        BIO_free(keyFile);
+    }
+    return privateKey;
+}
+
 static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, NSString *identifier) {
     NSData *challengeData = PowerPlayDecodeBase64(challenge);
     if (challengeData == nil || [challengeData length] > 16) {
@@ -181,12 +192,7 @@ static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, N
         signedLength = 32;
     }
 
-    NSString *keyPath = [[NSBundle mainBundle] pathForResource:@"RAOPPrivateKey" ofType:@"pem"];
-    PowerPlayBIO *keyFile = keyPath == nil ? NULL : BIO_new_file([keyPath fileSystemRepresentation], "r");
-    PowerPlayRSA *privateKey = keyFile == NULL ? NULL : PEM_read_bio_RSAPrivateKey(keyFile, NULL, NULL, NULL);
-    if (keyFile != NULL) {
-        BIO_free(keyFile);
-    }
+    PowerPlayRSA *privateKey = PowerPlayLoadPrivateKey();
     if (privateKey == NULL) {
         return nil;
     }
@@ -204,6 +210,60 @@ static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, N
     NSString *response = PowerPlayEncodeBase64WithoutPadding(signature, (NSUInteger)signatureLength);
     free(signature);
     return response;
+}
+
+static NSData *PowerPlayDecryptAudioKey(NSData *encryptedKey) {
+    if (encryptedKey == nil || [encryptedKey length] == 0) {
+        return nil;
+    }
+
+    PowerPlayRSA *privateKey = PowerPlayLoadPrivateKey();
+    if (privateKey == NULL) {
+        return nil;
+    }
+
+    int decryptedCapacity = RSA_size(privateKey);
+    unsigned char *decryptedKey = decryptedCapacity > 0 ? (unsigned char *)malloc((size_t)decryptedCapacity) : NULL;
+    int decryptedLength = decryptedKey == NULL ? -1 : RSA_private_decrypt(
+        (int)[encryptedKey length], [encryptedKey bytes], decryptedKey, privateKey, 1);
+    RSA_free(privateKey);
+
+    NSData *audioKey = decryptedLength == 16 ?
+        [NSData dataWithBytes:decryptedKey length:(NSUInteger)decryptedLength] : nil;
+    free(decryptedKey);
+    return audioKey;
+}
+
+static NSDictionary *PowerPlayAudioEncryptionFromSDP(NSString *sdp) {
+    if (sdp == nil || [sdp length] == 0) {
+        return nil;
+    }
+
+    NSString *encryptedKeyText = nil;
+    NSString *ivText = nil;
+    NSArray *lines = [sdp componentsSeparatedByString:@"\n"];
+    NSUInteger i;
+    for (i = 0; i < [lines count]; i++) {
+        NSString *line = [[lines objectAtIndex:i]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([line hasPrefix:@"a=rsaaeskey:"]) {
+            encryptedKeyText = [line substringFromIndex:[@"a=rsaaeskey:" length]];
+        } else if ([line hasPrefix:@"a=aesiv:"]) {
+            ivText = [line substringFromIndex:[@"a=aesiv:" length]];
+        }
+    }
+
+    NSData *encryptedKey = PowerPlayDecodeBase64(encryptedKeyText);
+    NSData *audioIV = PowerPlayDecodeBase64(ivText);
+    NSData *audioKey = PowerPlayDecryptAudioKey(encryptedKey);
+    if (audioKey == nil || [audioIV length] != 16) {
+        return nil;
+    }
+
+    return [NSDictionary dictionaryWithObjectsAndKeys:
+        audioKey, @"key",
+        audioIV, @"iv",
+        nil];
 }
 
 static NSUInteger PowerPlayRTSPHeaderEnd(const unsigned char *bytes, NSUInteger length) {
@@ -429,6 +489,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         albumName = nil;
         trackName = nil;
         metadata = [[NSMutableDictionary alloc] init];
+        audioAESKey = nil;
+        audioAESIV = nil;
         alacDecoder = [[ALACDecoder alloc] init];
         metadataParser = [[AirPlayMetadataParser alloc] init];
 
@@ -477,6 +539,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [albumName release];
     [trackName release];
     [metadata release];
+    [audioAESKey release];
+    [audioAESIV release];
     [alacDecoder release];
     [metadataParser release];
     [audioPlayer release];
@@ -665,6 +729,16 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 }
             }
         } else if ([method isEqualToString:@"ANNOUNCE"]) {
+            NSDictionary *audioEncryption = PowerPlayAudioEncryptionFromSDP(requestParameter);
+            [audioAESKey release];
+            [audioAESIV release];
+            audioAESKey = [[audioEncryption objectForKey:@"key"] retain];
+            audioAESIV = [[audioEncryption objectForKey:@"iv"] retain];
+            if (audioAESKey != nil && audioAESIV != nil) {
+                NSLog(@"RAOP: ANNOUNCE audio AES key decrypted and IV parsed");
+            } else {
+                NSLog(@"RAOP: unable to decrypt ANNOUNCE audio key or parse IV");
+            }
             rtspSessionEstablished = YES;
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
         } else if ([method isEqualToString:@"SETUP"]) {
