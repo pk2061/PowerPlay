@@ -1,5 +1,6 @@
 #import "RAOPReceiver.h"
 
+#import <CommonCrypto/CommonCryptor.h>
 #import <sys/socket.h>
 #import <sys/select.h>
 #import <netinet/in.h>
@@ -283,6 +284,81 @@ static NSDictionary *PowerPlayAudioEncryptionFromSDP(NSString *sdp) {
         audioKey, @"key",
         audioIV, @"iv",
         nil];
+}
+
+static BOOL PowerPlayRTPPayloadRange(NSData *packet, NSRange *payloadRange) {
+    if (packet == nil || payloadRange == NULL || [packet length] < 12) {
+        return NO;
+    }
+
+    const unsigned char *bytes = [packet bytes];
+    if (((bytes[0] >> 6) & 0x03) != 2) {
+        return NO;
+    }
+
+    NSUInteger packetLength = [packet length];
+    NSUInteger headerLength = 12 + (NSUInteger)(bytes[0] & 0x0F) * 4;
+    if (headerLength > packetLength) {
+        return NO;
+    }
+
+    if ((bytes[0] & 0x10) != 0) {
+        if (packetLength - headerLength < 4) {
+            return NO;
+        }
+        NSUInteger extensionWords = ((NSUInteger)bytes[headerLength + 2] << 8) |
+                                   (NSUInteger)bytes[headerLength + 3];
+        NSUInteger extensionLength = 4 + extensionWords * 4;
+        if (extensionLength > packetLength - headerLength) {
+            return NO;
+        }
+        headerLength += extensionLength;
+    }
+
+    NSUInteger paddingLength = 0;
+    if ((bytes[0] & 0x20) != 0) {
+        paddingLength = bytes[packetLength - 1];
+        if (paddingLength == 0 || paddingLength > packetLength - headerLength) {
+            return NO;
+        }
+    }
+
+    NSUInteger payloadLength = packetLength - headerLength - paddingLength;
+    if (payloadLength == 0) {
+        return NO;
+    }
+
+    *payloadRange = NSMakeRange(headerLength, payloadLength);
+    return YES;
+}
+
+static NSData *PowerPlayDecryptRTPPayload(NSData *packet, NSRange payloadRange, NSData *key, NSData *iv) {
+    if (packet == nil || key == nil || [key length] != 16 || iv == nil || [iv length] != 16 ||
+        NSMaxRange(payloadRange) > [packet length]) {
+        return nil;
+    }
+
+    NSUInteger encryptedLength = payloadRange.length & ~(NSUInteger)0x0F;
+    if (encryptedLength == 0) {
+        return nil;
+    }
+
+    NSMutableData *decrypted = [NSMutableData dataWithLength:payloadRange.length];
+    const unsigned char *input = (const unsigned char *)[packet bytes] + payloadRange.location;
+    unsigned char *output = [decrypted mutableBytes];
+    size_t decryptedLength = 0;
+    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES128, 0,
+                                     [key bytes], [key length], [iv bytes],
+                                     input, encryptedLength, output, encryptedLength,
+                                     &decryptedLength);
+    if (status != kCCSuccess || decryptedLength != encryptedLength) {
+        return nil;
+    }
+
+    if (encryptedLength < payloadRange.length) {
+        memcpy(output + encryptedLength, input + encryptedLength, payloadRange.length - encryptedLength);
+    }
+    return decrypted;
 }
 
 static NSUInteger PowerPlayRTSPHeaderEnd(const unsigned char *bytes, NSUInteger length) {
@@ -749,11 +825,15 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             }
         } else if ([method isEqualToString:@"ANNOUNCE"]) {
             NSDictionary *audioEncryption = PowerPlayAudioEncryptionFromSDP(requestParameter);
-            [audioAESKey release];
-            [audioAESIV release];
-            audioAESKey = [[audioEncryption objectForKey:@"key"] retain];
-            audioAESIV = [[audioEncryption objectForKey:@"iv"] retain];
-            if (audioAESKey != nil && audioAESIV != nil) {
+            NSData *newAudioAESKey = [audioEncryption objectForKey:@"key"];
+            NSData *newAudioAESIV = [audioEncryption objectForKey:@"iv"];
+            @synchronized(self) {
+                [audioAESKey release];
+                [audioAESIV release];
+                audioAESKey = [newAudioAESKey retain];
+                audioAESIV = [newAudioAESIV retain];
+            }
+            if (newAudioAESKey != nil && newAudioAESIV != nil) {
                 NSLog(@"RAOP: ANNOUNCE audio AES key decrypted and IV parsed");
             } else {
                 NSLog(@"RAOP: unable to decrypt ANNOUNCE audio key or parse IV");
@@ -1190,6 +1270,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (void)receiveAudioPackets {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
     unsigned long packetCount = 0;
+    unsigned long invalidPacketCount = 0;
+    unsigned long decryptFailureCount = 0;
+    unsigned long decryptedPacketCount = 0;
     NSLog(@"RAOP: audio RTP receiver started");
 
     while (acceptingRTSP) {
@@ -1233,9 +1316,42 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                     (struct sockaddr *)&sender, &senderLength);
         if (received > 0) {
             packetCount++;
-            if (packetCount == 1 || packetCount % 100 == 0) {
-                NSLog(@"RAOP: received %lu audio RTP datagrams; latest=%ld bytes from %s:%u",
-                      packetCount, (long)received, inet_ntoa(sender.sin_addr),
+            NSData *packet = [NSData dataWithBytes:packetBuffer length:(NSUInteger)received];
+            NSRange payloadRange;
+            if (![self validateRTPPacket:packet] || !PowerPlayRTPPayloadRange(packet, &payloadRange)) {
+                invalidPacketCount++;
+                if (invalidPacketCount == 1) {
+                    NSLog(@"RAOP: rejected first invalid RTP audio datagram (%ld bytes)", (long)received);
+                }
+                continue;
+            }
+
+            NSData *key = nil;
+            NSData *iv = nil;
+            @synchronized(self) {
+                key = [audioAESKey retain];
+                iv = [audioAESIV retain];
+            }
+            NSData *decryptedPayload = PowerPlayDecryptRTPPayload(packet, payloadRange, key, iv);
+            [key release];
+            [iv release];
+            if (decryptedPayload == nil) {
+                decryptFailureCount++;
+                if (decryptFailureCount == 1) {
+                    NSLog(@"RAOP: could not decrypt first RTP payload (%lu bytes)",
+                          (unsigned long)payloadRange.length);
+                }
+                continue;
+            }
+
+            decryptedPacketCount++;
+            if (decryptedPacketCount == 1 || decryptedPacketCount % 100 == 0) {
+                const unsigned char *bytes = [packet bytes];
+                unsigned int payloadType = bytes[1] & 0x7F;
+                unsigned int sequenceNumber = ((unsigned int)bytes[2] << 8) | bytes[3];
+                NSLog(@"RAOP: decrypted %lu RTP audio payloads; PT=%u seq=%u payload=%lu bytes from %s:%u",
+                      decryptedPacketCount, payloadType, sequenceNumber,
+                      (unsigned long)payloadRange.length, inet_ntoa(sender.sin_addr),
                       (unsigned int)ntohs(sender.sin_port));
             }
         } else if (received < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
