@@ -1327,10 +1327,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             packetCount++;
             NSData *packet = [NSData dataWithBytes:packetBuffer length:(NSUInteger)received];
             NSRange payloadRange;
-            if (![self validateRTPPacket:packet] || !PowerPlayRTPPayloadRange(packet, &payloadRange)) {
+            BOOL validRTPHeader = [self validateRTPPacket:packet];
+            BOOL validPayloadLayout = validRTPHeader && PowerPlayRTPPayloadRange(packet, &payloadRange);
+            if (!validRTPHeader || !validPayloadLayout) {
                 invalidPacketCount++;
                 if (invalidPacketCount == 1) {
-                    NSLog(@"RAOP: rejected first invalid RTP audio datagram (%ld bytes)", (long)received);
+                    const unsigned char *bytes = [packet bytes];
+                    unsigned int version = [packet length] > 0 ? (bytes[0] >> 6) & 0x03 : 0;
+                    unsigned int payloadType = [packet length] > 1 ? bytes[1] & 0x7F : 0;
+                    unsigned int sequence = [packet length] > 3 ? ((unsigned int)bytes[2] << 8) | bytes[3] : 0;
+                    NSLog(@"RAOP: rejected first RTP audio datagram (%ld bytes; header-valid=%d payload-layout-valid=%d version=%u PT=%u seq=%u)",
+                          (long)received, validRTPHeader, validPayloadLayout,
+                          version, payloadType, sequence);
                 }
                 continue;
             }
@@ -1744,34 +1752,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     BOOL isLegacyAudioPayload = (payloadType == 0 || payloadType == 1 || payloadType == 3 || payloadType == 8 || payloadType == 9 || payloadType == 11);
     if (!isDynamicAudioPayload && !isLegacyAudioPayload) {
         return NO;
-    }
-
-    uint32_t ssrc = ((uint32_t)bytes[8] << 24) |
-                    ((uint32_t)bytes[9] << 16) |
-                    ((uint32_t)bytes[10] << 8) |
-                    (uint32_t)bytes[11];
-    if (ssrc == 0) {
-        return NO;
-    }
-
-    unsigned int sequenceNumber = ((unsigned int)bytes[2] << 8) | bytes[3];
-    unsigned int timestamp = ((unsigned int)bytes[4] << 24) |
-                            ((unsigned int)bytes[5] << 16) |
-                            ((unsigned int)bytes[6] << 8) |
-                            ((unsigned int)bytes[7]);
-
-    if (sequenceNumber == 0 && timestamp == 0) {
-        BOOL hasNonZeroPayload = NO;
-        NSUInteger i;
-        for (i = 12; i < [packet length]; i++) {
-            if (((const unsigned char *)[packet bytes])[i] != 0) {
-                hasNonZeroPayload = YES;
-                break;
-            }
-        }
-        if (!hasNonZeroPayload) {
-            return NO;
-        }
     }
 
     return YES;
