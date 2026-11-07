@@ -23,6 +23,8 @@ typedef unsigned long NSUInteger;
 #import "AirPlayMetadataParser.h"
 #import "CoreAudioPlayer.h"
 
+extern NSString * const PowerPlayMetadataDidChangeNotification;
+
 @interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
     NSNetService *publishedService;
     NSNetService *resolvedService;
@@ -89,6 +91,8 @@ typedef unsigned long NSUInteger;
 - (void)handleRTPPacket:(NSData *)packet;
 - (void)handleMetadataPacket:(NSData *)packet;
 - (void)parseMetadataFromPlistData:(NSData *)plistData;
+- (void)applyParsedMetadata:(NSDictionary *)parsedMetadata;
+- (void)notifyMetadataDidChange;
 - (void)notifyTrackChangeIfNeeded;
 
 - (NSString *)currentTitle;

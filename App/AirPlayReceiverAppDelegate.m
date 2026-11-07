@@ -7,6 +7,10 @@
     NSLog(@"PowerPlay: applicationDidFinishLaunching");
     [self installApplicationMenu];
     receiver = [[RAOPReceiver alloc] init];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(receiverMetadataDidChange:)
+                                                   name:PowerPlayMetadataDidChangeNotification
+                                                 object:receiver];
     growlNotifier = [[GrowlNotifier alloc] init];
     lastGrowlTitle = nil;
     [self buildUI];
@@ -196,6 +200,13 @@
     }
 }
 
+- (void)receiverMetadataDidChange:(NSNotification *)notification {
+    (void)notification;
+    [self performSelectorOnMainThread:@selector(refreshUI)
+                           withObject:nil
+                        waitUntilDone:NO];
+}
+
 - (IBAction)togglePlayPause:(id)sender {
     if ([receiver isPlaying]) {
         [receiver pause];
@@ -220,6 +231,9 @@
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     NSLog(@"PowerPlay: applicationWillTerminate");
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                                                                        name:PowerPlayMetadataDidChangeNotification
+                                                                                                    object:receiver];
     [receiver stopReceiver];
     [growlNotifier release];
     [lastGrowlTitle release];

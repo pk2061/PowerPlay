@@ -21,6 +21,10 @@
 
 @interface AirPlayMetadataParser (PrivateCompatibility)
 - (NSData *)artworkDataFromObject:(id)object;
+- (void)collectDMAPBytes:(const unsigned char *)bytes
+                                    length:(NSUInteger)length
+                                        into:(NSMutableDictionary *)result
+                                     depth:(NSUInteger)depth;
 @end
 
 @implementation AirPlayMetadataParser
@@ -282,6 +286,80 @@
             [self collectMetadataFromObject:[items objectAtIndex:i] into:result];
         }
     }
+}
+
+- (void)collectDMAPBytes:(const unsigned char *)bytes
+                  length:(NSUInteger)length
+                    into:(NSMutableDictionary *)result
+                   depth:(NSUInteger)depth {
+    if (bytes == NULL || result == nil || depth > 8) {
+        return;
+    }
+
+    NSArray *containerTags = [NSArray arrayWithObjects:
+        @"mlcl", @"mlit", @"mlog", @"mshl", @"mdcl", @"mupd", @"msrv",
+        @"adbs", @"aply", @"abro", @"abar", @"cmst", @"cann", @"cang", nil];
+    NSUInteger offset = 0;
+    while (length - offset >= 8) {
+        NSString *tag = [[[NSString alloc] initWithBytes:bytes + offset
+                                                  length:4
+                                                encoding:NSASCIIStringEncoding] autorelease];
+        if (tag == nil) {
+            return;
+        }
+
+        unsigned long valueLength = ((unsigned long)bytes[offset + 4] << 24) |
+                                    ((unsigned long)bytes[offset + 5] << 16) |
+                                    ((unsigned long)bytes[offset + 6] << 8) |
+                                    (unsigned long)bytes[offset + 7];
+        offset += 8;
+        if (valueLength > length - offset) {
+            return;
+        }
+
+        const unsigned char *valueBytes = bytes + offset;
+        NSString *metadataKey = nil;
+        if ([tag isEqualToString:@"minm"]) {
+            metadataKey = @"title";
+        } else if ([tag isEqualToString:@"asar"]) {
+            metadataKey = @"artist";
+        } else if ([tag isEqualToString:@"asal"]) {
+            metadataKey = @"album";
+        }
+
+        if (metadataKey != nil && valueLength > 0) {
+            NSString *value = [[[NSString alloc] initWithBytes:valueBytes
+                                                        length:valueLength
+                                                      encoding:NSUTF8StringEncoding] autorelease];
+            if (value == nil) {
+                value = [[[NSString alloc] initWithBytes:valueBytes
+                                                  length:valueLength
+                                                encoding:NSISOLatin1StringEncoding] autorelease];
+            }
+            value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if ([value length] > 0) {
+                [result setObject:value forKey:metadataKey];
+            }
+        } else if ([containerTags containsObject:tag] && valueLength > 0) {
+            [self collectDMAPBytes:valueBytes length:valueLength into:result depth:depth + 1];
+        }
+
+        offset += valueLength;
+    }
+}
+
+- (NSDictionary *)parseDMAPData:(NSData *)data {
+    if (data == nil || [data length] < 8) {
+        return [NSDictionary dictionary];
+    }
+
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    [self collectDMAPBytes:[data bytes] length:[data length] into:result depth:0];
+    if ([result count] > 0) {
+        [lastMetadata release];
+        lastMetadata = [result mutableCopy];
+    }
+    return result;
 }
 
 - (BOOL)validatePacketAgainstSenderModel:(NSData *)packetData {

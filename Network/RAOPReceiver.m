@@ -14,6 +14,8 @@
 #import <stdio.h>
 #import <math.h>
 
+NSString * const PowerPlayMetadataDidChangeNotification = @"PowerPlayMetadataDidChangeNotification";
+
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
 typedef struct {
@@ -876,6 +878,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         lastRTSPRequest = [NSString stringWithFormat:@"%@ CSeq %@", method, cseq];
         NSString *sessionHeader = [headers objectForKey:@"session"];
         NSString *transport = [headers objectForKey:@"transport"];
+        NSString *requestContentType = [headers objectForKey:@"content-type"];
         NSString *status = @"200 OK";
         NSString *responseHeaders = @"";
         NSString *responseBody = nil;
@@ -981,28 +984,46 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             rtspSessionEstablished = NO;
             [audioPlayer stop];
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
-        } else if ([method isEqualToString:@"FLUSH"] ||
-                   [method isEqualToString:@"SET_PARAMETER"]) {
+        } else if ([method isEqualToString:@"FLUSH"]) {
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             contentType = @"text/parameters";
-            if ([requestParameter length] > 0) {
-                if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    NSScanner *scanner = [NSScanner scannerWithString:requestParameter];
-                    NSString *volumeLabel = nil;
-                    float parsedVolume = 0.0f;
-                    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-                    if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
-                        [scanner scanFloat:&parsedVolume]) {
-                        volume = PowerPlayLinearGainFromDecibels(parsedVolume);
-                        [audioPlayer setVolume:volume];
-                    }
-                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
-                        PowerPlayDecibelsFromLinearGain(volume)];
-                } else {
-                    responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
-                }
-            } else {
+            responseBody = @"";
+        } else if ([method isEqualToString:@"SET_PARAMETER"]) {
+            responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
+            if ([requestContentType hasPrefix:@"application/x-dmap-tagged"]) {
+                NSDictionary *parsedMetadata = [metadataParser parseDMAPData:requestBodyData];
+                [self applyParsedMetadata:parsedMetadata];
                 responseBody = @"";
+            } else if ([requestContentType hasPrefix:@"image/"]) {
+                if ([requestBodyData length] > 0) {
+                    NSDictionary *artwork = [NSDictionary dictionaryWithObject:requestBodyData
+                                                                        forKey:@"coverArtData"];
+                    [self applyParsedMetadata:artwork];
+                    NSLog(@"RAOP: received cover art (%lu bytes, %@)",
+                          (unsigned long)[requestBodyData length], requestContentType);
+                }
+                responseBody = @"";
+            } else {
+                contentType = @"text/parameters";
+                if ([requestParameter length] > 0) {
+                    if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                        NSScanner *scanner = [NSScanner scannerWithString:requestParameter];
+                        NSString *volumeLabel = nil;
+                        float parsedVolume = 0.0f;
+                        NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+                        if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
+                            [scanner scanFloat:&parsedVolume]) {
+                            volume = PowerPlayLinearGainFromDecibels(parsedVolume);
+                            [audioPlayer setVolume:volume];
+                        }
+                        responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
+                            PowerPlayDecibelsFromLinearGain(volume)];
+                    } else {
+                        responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
+                    }
+                } else {
+                    responseBody = @"";
+                }
             }
         } else if ([method isEqualToString:@"GET_PARAMETER"]) {
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
@@ -1768,20 +1789,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
     NSDictionary *parsedMetadata = [metadataParser parsePlistData:packet];
     if ([parsedMetadata count] > 0) {
-        [self parseMetadataFromPlistData:packet];
-        if ([parsedMetadata objectForKey:@"title"] != nil) {
-            NSString *newTitle = [parsedMetadata objectForKey:@"title"];
-            [trackName release];
-            trackName = [newTitle copy];
-            [currentTitle release];
-            currentTitle = [newTitle copy];
-            [self notifyTrackChangeIfNeeded];
-        }
-        if ([parsedMetadata objectForKey:@"coverArtData"] != nil) {
-            NSData *coverData = [parsedMetadata objectForKey:@"coverArtData"];
-            [coverArtData release];
-            coverArtData = [coverData copy];
-        }
+        [self applyParsedMetadata:parsedMetadata];
     }
 
     NSString *packetText = [[[NSString alloc] initWithData:packet encoding:NSUTF8StringEncoding] autorelease];
@@ -1796,38 +1804,63 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
 
     NSDictionary *parsed = [metadataParser parsePlistData:plistData];
-    if (parsed == nil || [parsed count] == 0) {
+    [self applyParsedMetadata:parsed];
+}
+
+- (void)applyParsedMetadata:(NSDictionary *)parsedMetadata {
+    if (parsedMetadata == nil || [parsedMetadata count] == 0) {
         return;
     }
 
-    NSString *newTitle = [parsed objectForKey:@"title"];
-    if (newTitle != nil && [newTitle length] > 0) {
-        [trackName release];
-        trackName = [newTitle copy];
-        [currentTitle release];
-        currentTitle = [newTitle copy];
+    BOOL changed = NO;
+    BOOL titleChanged = NO;
+    NSString *newTitle = [parsedMetadata objectForKey:@"title"];
+    NSString *newArtist = [parsedMetadata objectForKey:@"artist"];
+    NSString *newAlbum = [parsedMetadata objectForKey:@"album"];
+    NSData *newCoverData = [parsedMetadata objectForKey:@"coverArtData"];
+
+    @synchronized(self) {
+        if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
+            ![newTitle isEqualToString:currentTitle]) {
+            [trackName release];
+            trackName = [newTitle copy];
+            [currentTitle release];
+            currentTitle = [newTitle copy];
+            changed = YES;
+            titleChanged = YES;
+        }
+        if ([newArtist isKindOfClass:[NSString class]] && [newArtist length] > 0 &&
+            ![newArtist isEqualToString:artistName]) {
+            [artistName release];
+            artistName = [newArtist copy];
+            changed = YES;
+        }
+        if ([newAlbum isKindOfClass:[NSString class]] && [newAlbum length] > 0 &&
+            ![newAlbum isEqualToString:albumName]) {
+            [albumName release];
+            albumName = [newAlbum copy];
+            changed = YES;
+        }
+        if ([newCoverData isKindOfClass:[NSData class]] && [newCoverData length] > 0 &&
+            ![newCoverData isEqualToData:coverArtData]) {
+            [coverArtData release];
+            coverArtData = [newCoverData copy];
+            changed = YES;
+        }
+        [metadata addEntriesFromDictionary:parsedMetadata];
+    }
+
+    if (titleChanged) {
         [self notifyTrackChangeIfNeeded];
     }
-
-    NSString *newArtist = [parsed objectForKey:@"artist"];
-    if (newArtist != nil && [newArtist length] > 0) {
-        [artistName release];
-        artistName = [newArtist copy];
+    if (changed) {
+        [self notifyMetadataDidChange];
     }
+}
 
-    NSString *newAlbum = [parsed objectForKey:@"album"];
-    if (newAlbum != nil && [newAlbum length] > 0) {
-        [albumName release];
-        albumName = [newAlbum copy];
-    }
-
-    NSData *newCoverData = [parsed objectForKey:@"coverArtData"];
-    if (newCoverData != nil && [newCoverData length] > 0) {
-        [coverArtData release];
-        coverArtData = [newCoverData copy];
-    }
-
-    [metadata addEntriesFromDictionary:parsed];
+- (void)notifyMetadataDidChange {
+    [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayMetadataDidChangeNotification
+                                                        object:self];
 }
 
 - (void)notifyTrackChangeIfNeeded {
@@ -2229,22 +2262,30 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (NSString *)currentTitle {
-    if (currentTitle == nil || [currentTitle length] == 0) {
-        return trackName;
+    @synchronized(self) {
+        if (currentTitle == nil || [currentTitle length] == 0) {
+            return [[trackName retain] autorelease];
+        }
+        return [[currentTitle retain] autorelease];
     }
-    return currentTitle;
 }
 
 - (NSString *)artistName {
-    return artistName;
+    @synchronized(self) {
+        return [[artistName retain] autorelease];
+    }
 }
 
 - (NSString *)albumName {
-    return albumName;
+    @synchronized(self) {
+        return [[albumName retain] autorelease];
+    }
 }
 
 - (NSString *)trackName {
-    return trackName;
+    @synchronized(self) {
+        return [[trackName retain] autorelease];
+    }
 }
 
 - (float)volumeValue {
@@ -2252,7 +2293,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (NSData *)coverArtData {
-    return coverArtData;
+    @synchronized(self) {
+        return [[coverArtData retain] autorelease];
+    }
 }
 
 - (BOOL)isPlaying {

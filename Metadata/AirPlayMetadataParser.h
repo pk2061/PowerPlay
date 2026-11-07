@@ -18,6 +18,7 @@ typedef unsigned long NSUInteger;
 - (NSDictionary *)lastMetadata;
 - (BOOL)validatePacketAgainstSenderModel:(NSData *)packetData;
 - (NSDictionary *)parsePlistData:(NSData *)data;
+- (NSDictionary *)parseDMAPData:(NSData *)data;
 - (NSString *)extractStringValue:(NSString *)key fromDictionary:(NSDictionary *)dictionary;
 - (NSData *)extractArtworkData:(NSDictionary *)dictionary;
 
