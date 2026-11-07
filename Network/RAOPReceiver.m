@@ -214,11 +214,13 @@ static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, N
 
 static NSData *PowerPlayDecryptAudioKey(NSData *encryptedKey) {
     if (encryptedKey == nil || [encryptedKey length] == 0) {
+        NSLog(@"RAOP: ANNOUNCE rsaaeskey Base64 decoding failed");
         return nil;
     }
 
     PowerPlayRSA *privateKey = PowerPlayLoadPrivateKey();
     if (privateKey == NULL) {
+        NSLog(@"RAOP: could not load private key for audio-key decryption");
         return nil;
     }
 
@@ -228,6 +230,10 @@ static NSData *PowerPlayDecryptAudioKey(NSData *encryptedKey) {
         (int)[encryptedKey length], [encryptedKey bytes], decryptedKey, privateKey, 1);
     RSA_free(privateKey);
 
+    if (decryptedLength != 16) {
+        NSLog(@"RAOP: RSA audio-key decryption returned %d bytes (ciphertext=%lu, RSA size=%d)",
+              decryptedLength, (unsigned long)[encryptedKey length], decryptedCapacity);
+    }
     NSData *audioKey = decryptedLength == 16 ?
         [NSData dataWithBytes:decryptedKey length:(NSUInteger)decryptedLength] : nil;
     free(decryptedKey);
@@ -255,6 +261,14 @@ static NSDictionary *PowerPlayAudioEncryptionFromSDP(NSString *sdp) {
 
     NSData *encryptedKey = PowerPlayDecodeBase64(encryptedKeyText);
     NSData *audioIV = PowerPlayDecodeBase64(ivText);
+    if (encryptedKey == nil || audioIV == nil) {
+        NSLog(@"RAOP: ANNOUNCE Base64 fields invalid (key=%@, IV=%@)",
+              encryptedKey == nil ? @"invalid" : @"decoded",
+              audioIV == nil ? @"invalid" : @"decoded");
+    } else if ([audioIV length] != 16) {
+        NSLog(@"RAOP: ANNOUNCE AES IV decoded to %lu bytes (expected 16)",
+              (unsigned long)[audioIV length]);
+    }
     NSData *audioKey = PowerPlayDecryptAudioKey(encryptedKey);
     if (audioKey == nil || [audioIV length] != 16) {
         return nil;
