@@ -11,6 +11,7 @@
 #import <string.h>
 #import <errno.h>
 #import <stdio.h>
+#import <math.h>
 
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
@@ -24,6 +25,26 @@ enum {
     PowerPlayRSAOAEPPadding = 4,
     PowerPlayAESDecrypt = 0
 };
+
+static float PowerPlayLinearGainFromDecibels(float decibels) {
+    if (decibels <= -144.0f) {
+        return 0.0f;
+    }
+    if (decibels >= 0.0f) {
+        return 1.0f;
+    }
+    return powf(10.0f, decibels / 20.0f);
+}
+
+static float PowerPlayDecibelsFromLinearGain(float gain) {
+    if (gain <= 0.0f) {
+        return -144.0f;
+    }
+    if (gain >= 1.0f) {
+        return 0.0f;
+    }
+    return 20.0f * log10f(gain);
+}
 
 extern PowerPlayBIO *BIO_new_file(const char *filename, const char *mode);
 extern PowerPlayRSA *PEM_read_bio_RSAPrivateKey(PowerPlayBIO *bio, PowerPlayRSA **rsa, void *callback, void *userData);
@@ -610,6 +631,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         format.mBytesPerFrame = 4;
 
         audioPlayer = [[CoreAudioPlayer alloc] initWithAudioFormat:&format];
+        [audioPlayer setVolume:volume];
     }
     return self;
 }
@@ -924,11 +946,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                     float parsedVolume = 0.0f;
                     NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
                     if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
-                        [scanner scanFloat:&parsedVolume] &&
-                        parsedVolume >= 0.0f && parsedVolume <= 1.0f) {
-                        volume = parsedVolume;
+                        [scanner scanFloat:&parsedVolume]) {
+                        volume = PowerPlayLinearGainFromDecibels(parsedVolume);
+                        [audioPlayer setVolume:volume];
                     }
-                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
+                        PowerPlayDecibelsFromLinearGain(volume)];
                 } else {
                     responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
                 }
@@ -940,14 +963,16 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             contentType = @"text/parameters";
             if ([requestParameter length] > 0) {
                 if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+                    responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
+                        PowerPlayDecibelsFromLinearGain(volume)];
                 } else if ([requestParameter rangeOfString:@"position" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                     responseBody = @"position: 0.000000\r\n";
                 } else {
                     responseBody = [NSString stringWithFormat:@"%@: %@\r\n", requestParameter, @""];
                 }
             } else {
-                responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
+                responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
+                    PowerPlayDecibelsFromLinearGain(volume)];
             }
         } else {
             status = @"501 Not Implemented";
@@ -1940,8 +1965,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     if (volume > 1.0f) {
         volume = 1.0f;
     }
+    [audioPlayer setVolume:volume];
 
-    NSString *level = [NSString stringWithFormat:@"%.3f", volume];
+    NSString *level = [NSString stringWithFormat:@"%.3f", PowerPlayDecibelsFromLinearGain(volume)];
     [self sendRTSPCommand:@"SET_PARAMETER" path:@"/" headers:[NSDictionary dictionaryWithObject:level forKey:@"volume"] body:nil];
 }
 

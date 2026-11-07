@@ -1,4 +1,5 @@
 #import "CoreAudioPlayer.h"
+#import <math.h>
 
 static OSStatus AUOutputCallback(void *inRefCon,
                                 AudioUnitRenderActionFlags *ioActionFlags,
@@ -28,6 +29,8 @@ static OSStatus AUOutputCallback(void *inRefCon,
         UInt32 bytesAvailable = (UInt32)[queuedAudio length];
         UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
         const void *queuedBytes = [queuedAudio bytes];
+        const unsigned char *sourceBytes = (const unsigned char *)queuedBytes;
+        BOOL bigEndian = (streamFormat.mFormatFlags & kAudioFormatFlagIsBigEndian) != 0;
         UInt32 i;
 
         for (i = 0; i < bufferList->mNumberBuffers; i++) {
@@ -35,7 +38,27 @@ static OSStatus AUOutputCallback(void *inRefCon,
             UInt32 copyLength = (i == 0) ? bytesToCopy : 0;
             if (buffer->mData != NULL) {
                 if (copyLength > 0) {
-                    memcpy(buffer->mData, queuedBytes, copyLength);
+                    if (volume >= 0.99999f || streamFormat.mBitsPerChannel != 16) {
+                        memcpy(buffer->mData, queuedBytes, copyLength);
+                    } else {
+                        unsigned char *destinationBytes = (unsigned char *)buffer->mData;
+                        UInt32 sampleOffset;
+                        for (sampleOffset = 0; sampleOffset + 1 < copyLength; sampleOffset += 2) {
+                            UInt16 encoded = bigEndian ?
+                                (UInt16)(((UInt16)sourceBytes[sampleOffset] << 8) | sourceBytes[sampleOffset + 1]) :
+                                (UInt16)(((UInt16)sourceBytes[sampleOffset + 1] << 8) | sourceBytes[sampleOffset]);
+                            SInt32 sample = (encoded & 0x8000) != 0 ? (SInt32)encoded - 65536 : (SInt32)encoded;
+                            SInt32 scaledSample = (SInt32)((float)sample * volume);
+                            UInt16 scaledEncoded = (UInt16)(SInt16)scaledSample;
+                            if (bigEndian) {
+                                destinationBytes[sampleOffset] = (unsigned char)(scaledEncoded >> 8);
+                                destinationBytes[sampleOffset + 1] = (unsigned char)scaledEncoded;
+                            } else {
+                                destinationBytes[sampleOffset] = (unsigned char)scaledEncoded;
+                                destinationBytes[sampleOffset + 1] = (unsigned char)(scaledEncoded >> 8);
+                            }
+                        }
+                    }
                 }
                 if (copyLength < bytesRequested) {
                     memset((unsigned char *)buffer->mData + copyLength, 0,
@@ -64,6 +87,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
         streamFormat = *format;
         outputUnit = NULL;
         isPlaying = NO;
+        volume = 1.0f;
         queuedAudio = [[NSMutableData alloc] init];
 
         ComponentDescription description;
@@ -124,13 +148,19 @@ static OSStatus AUOutputCallback(void *inRefCon,
         return;
     }
 
-    if (!isPlaying) {
-        OSStatus status = AudioOutputUnitStart(outputUnit);
-        if (status == noErr) {
-            isPlaying = YES;
-        } else {
-            NSLog(@"CoreAudio: failed to start output unit (%d)", (int)status);
+    @synchronized(self) {
+        if (isPlaying) {
+            return;
         }
+    }
+
+    OSStatus status = AudioOutputUnitStart(outputUnit);
+    if (status == noErr) {
+        @synchronized(self) {
+            isPlaying = YES;
+        }
+    } else {
+        NSLog(@"CoreAudio: failed to start output unit (%d)", (int)status);
     }
 }
 
@@ -143,6 +173,18 @@ static OSStatus AUOutputCallback(void *inRefCon,
     @synchronized(self) {
         isPlaying = NO;
         [queuedAudio setLength:0];
+    }
+}
+
+- (void)setVolume:(float)newVolume {
+    if (newVolume < 0.0f) {
+        newVolume = 0.0f;
+    } else if (newVolume > 1.0f) {
+        newVolume = 1.0f;
+    }
+
+    @synchronized(self) {
+        volume = newVolume;
     }
 }
 
