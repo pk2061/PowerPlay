@@ -41,6 +41,7 @@ typedef unsigned long NSUInteger;
     NSInteger audioPort;
     NSInteger timingPort;
     NSInteger rtpControlPort;
+    NSInteger senderTimingPort;
     int controlSocket;
     int audioSocket;
     int timingSocket;

@@ -617,6 +617,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         audioPort = 6000;
         timingPort = 6002;
         rtpControlPort = 6001;
+        senderTimingPort = 0;
         controlSocket = -1;
         audioSocket = -1;
         timingSocket = -1;
@@ -906,7 +907,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 status = @"461 Unsupported Transport";
             } else {
                 NSInteger senderControlPort = PowerPlayTransportPort(transport, @"control_port");
-                NSInteger senderTimingPort = PowerPlayTransportPort(transport, @"timing_port");
+                NSInteger remoteTimingPort = PowerPlayTransportPort(transport, @"timing_port");
+                senderTimingPort = remoteTimingPort;
                 if (audioSocket >= 0) {
                     close(audioSocket);
                     audioSocket = -1;
@@ -932,7 +934,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                     isSetupComplete = YES;
                     rtpSessionReady = YES;
                     [metadata setObject:[NSNumber numberWithInt:(int)senderControlPort] forKey:@"sender_control_port"];
-                    [metadata setObject:[NSNumber numberWithInt:(int)senderTimingPort] forKey:@"sender_timing_port"];
+                    [metadata setObject:[NSNumber numberWithInt:(int)remoteTimingPort] forKey:@"sender_timing_port"];
                     responseHeaders = [NSString stringWithFormat:
                         @"Session: %@;timeout=60\r\nTransport: RTP/AVP/UDP;unicast;mode=record;server_port=%ld;control_port=%ld;timing_port=%ld\r\n",
                         rtspSessionId, (long)audioPort, (long)rtpControlPort, (long)timingPort];
@@ -1504,15 +1506,58 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 - (void)receiveTimingPackets {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
-    unsigned long requestCount = 0;
+    unsigned long inboundRequestCount = 0;
+    unsigned long outboundRequestCount = 0;
     unsigned long replyCount = 0;
     NSLog(@"RAOP: RTP timing responder started");
+    NSInteger activeSenderTimingPort = 0;
+    uint16_t sequenceNumber = 0;
+    uint64_t nextRequestTime = 0;
 
     while (acceptingRTSP) {
         int socketHandle = timingSocket;
         if (socketHandle < 0 || !isSetupComplete) {
             usleep(100000);
             continue;
+        }
+
+        NSInteger remoteTimingPort = senderTimingPort;
+        if (remoteTimingPort != activeSenderTimingPort) {
+            activeSenderTimingPort = remoteTimingPort;
+            sequenceNumber = 0;
+            nextRequestTime = 0;
+        }
+
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        uint64_t nowMicros = (uint64_t)now.tv_sec * 1000000ULL + (uint64_t)now.tv_usec;
+        if (remoteTimingPort > 0 && nowMicros >= nextRequestTime) {
+            struct sockaddr_in remoteAddress;
+            memset(&remoteAddress, 0, sizeof(remoteAddress));
+            remoteAddress.sin_family = AF_INET;
+            remoteAddress.sin_port = htons((unsigned short)remoteTimingPort);
+            if (hostAddress != nil &&
+                inet_pton(AF_INET, [hostAddress UTF8String], &remoteAddress.sin_addr) == 1) {
+                unsigned char timingRequest[32];
+                memset(timingRequest, 0, sizeof(timingRequest));
+                timingRequest[0] = 0x80;
+                timingRequest[1] = 0xD2;
+                uint16_t networkSequence = htons(sequenceNumber++);
+                memcpy(timingRequest + 2, &networkSequence, sizeof(networkSequence));
+                ssize_t sent = sendto(socketHandle, timingRequest, sizeof(timingRequest), 0,
+                                      (struct sockaddr *)&remoteAddress, sizeof(remoteAddress));
+                if (sent == (ssize_t)sizeof(timingRequest)) {
+                    outboundRequestCount++;
+                    if (outboundRequestCount == 1 || outboundRequestCount % 100 == 0) {
+                        NSLog(@"RAOP: sent %lu RTP timing requests to %s:%ld",
+                              outboundRequestCount, [hostAddress UTF8String], (long)remoteTimingPort);
+                    }
+                } else if (sent < 0) {
+                    NSLog(@"RAOP: RTP timing request failed (%d)", errno);
+                }
+            }
+            uint64_t intervalMicros = outboundRequestCount < 3 ? 300000ULL : 3000000ULL;
+            nextRequestTime = nowMicros + intervalMicros;
         }
 
         fd_set readSockets;
@@ -1552,11 +1597,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             continue;
         }
 
-        requestCount++;
         if (received < 32 || (request[0] & 0xC0) != 0x80 || request[1] != 0xD2) {
-            if (requestCount == 1) {
-                NSLog(@"RAOP: ignored non-timing packet on timing port (%ld bytes, type=0x%02x)",
-                      (long)received, received > 1 ? request[1] : 0);
+            if (received >= 2 && (request[0] & 0xC0) == 0x80 && request[1] == 0xD3) {
+                replyCount++;
+                if (replyCount == 1 || replyCount % 100 == 0) {
+                    NSLog(@"RAOP: received %lu RTP timing replies", replyCount);
+                }
+            } else {
+                inboundRequestCount++;
+                if (inboundRequestCount == 1) {
+                    NSLog(@"RAOP: ignored non-timing packet on timing port (%ld bytes, type=0x%02x)",
+                          (long)received, received > 1 ? request[1] : 0);
+                }
             }
             continue;
         }
@@ -1573,17 +1625,17 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         ssize_t sent = sendto(socketHandle, response, sizeof(response), 0,
                               (struct sockaddr *)&sender, senderLength);
         if (sent == (ssize_t)sizeof(response)) {
-            replyCount++;
-            if (replyCount == 1 || replyCount % 100 == 0) {
-                NSLog(@"RAOP: replied to %lu RTP timing requests", replyCount);
+            inboundRequestCount++;
+            if (inboundRequestCount == 1 || inboundRequestCount % 100 == 0) {
+                NSLog(@"RAOP: replied to %lu inbound RTP timing requests", inboundRequestCount);
             }
         } else if (sent < 0) {
             NSLog(@"RAOP: RTP timing reply failed (%d)", errno);
         }
     }
 
-    NSLog(@"RAOP: RTP timing responder stopped after %lu requests and %lu replies",
-          requestCount, replyCount);
+        NSLog(@"RAOP: RTP timing worker stopped after %lu outbound requests, %lu replies, and %lu inbound requests",
+                    outboundRequestCount, replyCount, inboundRequestCount);
     [threadPool drain];
 }
 
