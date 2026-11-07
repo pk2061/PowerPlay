@@ -727,13 +727,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             contentType = @"text/parameters";
             if ([requestParameter length] > 0) {
                 if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    NSArray *parts = [requestParameter componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                    NSString *newValue = [parts count] > 1 ? [parts objectAtIndex:1] : nil;
-                    if (newValue != nil && [newValue length] > 0) {
-                        float parsedVolume = [newValue floatValue];
-                        if (parsedVolume >= 0.0f && parsedVolume <= 1.0f) {
-                            volume = parsedVolume;
-                        }
+                    NSScanner *scanner = [NSScanner scannerWithString:requestParameter];
+                    NSString *volumeLabel = nil;
+                    float parsedVolume = 0.0f;
+                    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+                    if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
+                        [scanner scanFloat:&parsedVolume] &&
+                        parsedVolume >= 0.0f && parsedVolume <= 1.0f) {
+                        volume = parsedVolume;
                     }
                     responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n", volume];
                 } else {
