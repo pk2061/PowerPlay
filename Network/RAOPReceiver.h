@@ -77,6 +77,7 @@ typedef unsigned long NSUInteger;
 - (BOOL)validateRTSPTrace:(NSData *)traceData;
 - (BOOL)validateRTPPacket:(NSData *)packet;
 - (void)setupRTPStreams;
+- (void)receiveAudioPackets;
 - (void)bindRTPTransportOnPort:(NSInteger)port socket:(int *)socketHandle;
 - (void)readAudioPackets;
 - (void)readTimingPackets;

@@ -1,6 +1,7 @@
 #import "RAOPReceiver.h"
 
 #import <sys/socket.h>
+#import <sys/select.h>
 #import <netinet/in.h>
 #import <net/if.h>
 #import <net/if_dl.h>
@@ -520,6 +521,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [NSThread detachNewThreadSelector:@selector(acceptRTSPConnections)
                              toTarget:self
                            withObject:nil];
+        [NSThread detachNewThreadSelector:@selector(receiveAudioPackets)
+                                                         toTarget:self
+                                                     withObject:nil];
 
     [deviceIdentifier release];
     deviceIdentifier = [PowerPlayDeviceIdentifier() copy];
@@ -1088,6 +1092,66 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
     [self readAudioPackets];
     [self readTimingPackets];
+}
+
+- (void)receiveAudioPackets {
+    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    unsigned long packetCount = 0;
+    NSLog(@"RAOP: audio RTP receiver started");
+
+    while (acceptingRTSP) {
+        int socketHandle = audioSocket;
+        if (socketHandle < 0 || !isSetupComplete) {
+            usleep(100000);
+            continue;
+        }
+
+        fd_set readSockets;
+        FD_ZERO(&readSockets);
+        FD_SET(socketHandle, &readSockets);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 250000;
+
+        int ready = select(socketHandle + 1, &readSockets, NULL, NULL, &timeout);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (!acceptingRTSP) {
+                break;
+            }
+            if (socketHandle != audioSocket || !isSetupComplete) {
+                continue;
+            }
+            NSLog(@"RAOP: audio RTP select failed (%d)", errno);
+            usleep(100000);
+            continue;
+        }
+        if (ready == 0 || !FD_ISSET(socketHandle, &readSockets) ||
+            socketHandle != audioSocket || !isSetupComplete) {
+            continue;
+        }
+
+        char packetBuffer[65536];
+        struct sockaddr_in sender;
+        socklen_t senderLength = sizeof(sender);
+        ssize_t received = recvfrom(socketHandle, packetBuffer, sizeof(packetBuffer), 0,
+                                    (struct sockaddr *)&sender, &senderLength);
+        if (received > 0) {
+            packetCount++;
+            if (packetCount == 1 || packetCount % 100 == 0) {
+                NSLog(@"RAOP: received %lu audio RTP datagrams; latest=%ld bytes from %s:%u",
+                      packetCount, (long)received, inet_ntoa(sender.sin_addr),
+                      (unsigned int)ntohs(sender.sin_port));
+            }
+        } else if (received < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+            NSLog(@"RAOP: audio RTP receive failed (%d)", errno);
+        }
+    }
+
+    NSLog(@"RAOP: audio RTP receiver stopped after %lu datagrams", packetCount);
+    [threadPool drain];
 }
 
 - (void)readAudioPackets {
