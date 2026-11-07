@@ -836,6 +836,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             NSDictionary *audioEncryption = PowerPlayAudioEncryptionFromSDP(requestParameter);
             NSData *newAudioAESKey = [audioEncryption objectForKey:@"key"];
             NSData *newAudioAESIV = [audioEncryption objectForKey:@"iv"];
+            BOOL audioFormatReady = [alacDecoder configureWithSDP:requestParameter];
             @synchronized(self) {
                 [audioAESKey release];
                 [audioAESIV release];
@@ -846,6 +847,11 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 NSLog(@"RAOP: ANNOUNCE audio AES key decrypted and IV parsed");
             } else {
                 NSLog(@"RAOP: unable to decrypt ANNOUNCE audio key or parse IV");
+            }
+            if (!audioFormatReady) {
+                NSLog(@"RAOP: could not configure Apple Lossless decoder from ANNOUNCE fmtp");
+            } else {
+                NSLog(@"RAOP: Apple Lossless decoder configured from ANNOUNCE fmtp");
             }
             rtspSessionEstablished = YES;
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
@@ -1282,6 +1288,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     unsigned long invalidPacketCount = 0;
     unsigned long decryptFailureCount = 0;
     unsigned long decryptedPacketCount = 0;
+    unsigned long decodedPacketCount = 0;
     NSLog(@"RAOP: audio RTP receiver started");
 
     while (acceptingRTSP) {
@@ -1370,6 +1377,17 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                       decryptedPacketCount, payloadType, sequenceNumber,
                       (unsigned long)payloadRange.length, inet_ntoa(sender.sin_addr),
                       (unsigned int)ntohs(sender.sin_port));
+            }
+
+            NSData *pcmData = [alacDecoder decodePacket:decryptedPayload];
+            if (pcmData == nil || [pcmData length] == 0) {
+                continue;
+            }
+            decodedPacketCount++;
+            [audioPlayer enqueuePCMData:pcmData];
+            if (decodedPacketCount == 1 || decodedPacketCount % 100 == 0) {
+                NSLog(@"RAOP: decoded %lu ALAC packets to %lu PCM bytes",
+                      decodedPacketCount, (unsigned long)[pcmData length]);
             }
         } else if (received < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
             NSLog(@"RAOP: audio RTP receive failed (%d)", errno);

@@ -23,31 +23,33 @@ static OSStatus AUOutputCallback(void *inRefCon,
         return noErr;
     }
 
-    UInt32 bytesRequested = frameCount * streamFormat.mBytesPerFrame;
-    UInt32 bytesAvailable = (UInt32)[queuedAudio length];
-    UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
-    const void *queuedBytes = [queuedAudio bytes];
-    UInt32 i;
+    @synchronized(self) {
+        UInt32 bytesRequested = frameCount * streamFormat.mBytesPerFrame;
+        UInt32 bytesAvailable = (UInt32)[queuedAudio length];
+        UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
+        const void *queuedBytes = [queuedAudio bytes];
+        UInt32 i;
 
-    for (i = 0; i < bufferList->mNumberBuffers; i++) {
-        AudioBuffer *buffer = &bufferList->mBuffers[i];
-        UInt32 copyLength = (i == 0) ? bytesToCopy : 0;
-        if (buffer->mData != NULL) {
-            if (copyLength > 0) {
-                memcpy(buffer->mData, queuedBytes, copyLength);
+        for (i = 0; i < bufferList->mNumberBuffers; i++) {
+            AudioBuffer *buffer = &bufferList->mBuffers[i];
+            UInt32 copyLength = (i == 0) ? bytesToCopy : 0;
+            if (buffer->mData != NULL) {
+                if (copyLength > 0) {
+                    memcpy(buffer->mData, queuedBytes, copyLength);
+                }
+                if (copyLength < bytesRequested) {
+                    memset((unsigned char *)buffer->mData + copyLength, 0,
+                           bytesRequested - copyLength);
+                }
             }
-            if (copyLength < bytesRequested) {
-                memset((unsigned char *)buffer->mData + copyLength, 0,
-                       bytesRequested - copyLength);
-            }
+            buffer->mDataByteSize = bytesRequested;
         }
-        buffer->mDataByteSize = bytesRequested;
-    }
 
-    if (bytesToCopy > 0) {
-        [queuedAudio replaceBytesInRange:NSMakeRange(0, bytesToCopy)
-                               withBytes:NULL
-                                  length:0];
+        if (bytesToCopy > 0) {
+            [queuedAudio replaceBytesInRange:NSMakeRange(0, bytesToCopy)
+                                   withBytes:NULL
+                                      length:0];
+        }
     }
     return noErr;
 }
@@ -138,8 +140,10 @@ static OSStatus AUOutputCallback(void *inRefCon,
     }
 
     AudioOutputUnitStop(outputUnit);
-    isPlaying = NO;
-    [queuedAudio setLength:0];
+    @synchronized(self) {
+        isPlaying = NO;
+        [queuedAudio setLength:0];
+    }
 }
 
 - (void)enqueuePCMData:(NSData *)pcmData {
@@ -147,7 +151,9 @@ static OSStatus AUOutputCallback(void *inRefCon,
         return;
     }
 
-    [queuedAudio appendData:pcmData];
+    @synchronized(self) {
+        [queuedAudio appendData:pcmData];
+    }
 }
 
 - (BOOL)isPlaying {

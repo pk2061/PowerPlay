@@ -1,6 +1,60 @@
 #import <Foundation/Foundation.h>
 #import "ALACDecoder.h"
 
+typedef struct {
+    NSData *packetData;
+    UInt32 channels;
+    BOOL suppliedPacket;
+} PowerPlayALACInput;
+
+static OSStatus PowerPlayALACInputProc(AudioConverterRef converter,
+                                       UInt32 *packetCount,
+                                       AudioBufferList *inputData,
+                                       AudioStreamPacketDescription **packetDescriptions,
+                                       void *userData) {
+    (void)converter;
+    PowerPlayALACInput *input = (PowerPlayALACInput *)userData;
+    if (input == NULL || packetCount == NULL || inputData == NULL ||
+        input->suppliedPacket || input->packetData == nil || *packetCount == 0) {
+        if (packetCount != NULL) {
+            *packetCount = 0;
+        }
+        return noErr;
+    }
+
+    NSUInteger packetLength = [input->packetData length];
+    if (packetLength == 0 || packetLength > UINT32_MAX) {
+        *packetCount = 0;
+        return kAudio_ParamError;
+    }
+
+    inputData->mNumberBuffers = 1;
+    inputData->mBuffers[0].mNumberChannels = input->channels;
+    inputData->mBuffers[0].mDataByteSize = (UInt32)packetLength;
+    inputData->mBuffers[0].mData = (void *)[input->packetData bytes];
+    if (packetDescriptions != NULL && *packetDescriptions != NULL) {
+        (*packetDescriptions)[0].mStartOffset = 0;
+        (*packetDescriptions)[0].mVariableFramesInPacket = 0;
+        (*packetDescriptions)[0].mDataByteSize = (UInt32)packetLength;
+    }
+
+    *packetCount = 1;
+    input->suppliedPacket = YES;
+    return noErr;
+}
+
+static void PowerPlayWriteBigEndian16(unsigned char *bytes, UInt16 value) {
+    bytes[0] = (unsigned char)(value >> 8);
+    bytes[1] = (unsigned char)value;
+}
+
+static void PowerPlayWriteBigEndian32(unsigned char *bytes, UInt32 value) {
+    bytes[0] = (unsigned char)(value >> 24);
+    bytes[1] = (unsigned char)(value >> 16);
+    bytes[2] = (unsigned char)(value >> 8);
+    bytes[3] = (unsigned char)value;
+}
+
 @implementation ALACDecoder
 
 - (id)init {
@@ -23,17 +77,112 @@
     if (self != nil) {
         inputFormat = format;
         outputFormat = format;
-        decodeBuffer = [[NSMutableData alloc] init];
         pendingFrameData = [[NSMutableData alloc] init];
         lastFrameInfo = nil;
         converter = NULL;
         hasConverter = NO;
-
-        if (inputFormat.mFormatID == kAudioFormatLinearPCM) {
-            hasConverter = YES;
-        }
+        loggedDecodeFailure = NO;
     }
     return self;
+}
+
+- (BOOL)configureWithSDP:(NSString *)sdp {
+    if (sdp == nil || [sdp length] == 0) {
+        return NO;
+    }
+
+    int values[11];
+    BOOL foundFormat = NO;
+    NSArray *lines = [sdp componentsSeparatedByString:@"\n"];
+    NSUInteger lineIndex;
+    for (lineIndex = 0; lineIndex < [lines count]; lineIndex++) {
+        NSString *line = [[lines objectAtIndex:lineIndex]
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (![line hasPrefix:@"a=fmtp:"]) {
+            continue;
+        }
+
+        NSScanner *scanner = [NSScanner scannerWithString:line];
+        NSString *prefix = nil;
+        if (![scanner scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:&prefix]) {
+            continue;
+        }
+        NSUInteger valueIndex;
+        for (valueIndex = 0; valueIndex < 11; valueIndex++) {
+            if (![scanner scanInt:&values[valueIndex]]) {
+                break;
+            }
+        }
+        if (valueIndex == 11) {
+            foundFormat = YES;
+            break;
+        }
+    }
+
+    if (!foundFormat || values[0] <= 0 || values[0] > 65535 ||
+        values[2] <= 0 || values[2] > 32 || values[6] <= 0 || values[6] > 8 ||
+        values[10] <= 0 || values[10] > 192000) {
+        NSLog(@"ALAC: ANNOUNCE fmtp parameters are missing or invalid");
+        return NO;
+    }
+
+    unsigned char cookieBytes[24];
+    PowerPlayWriteBigEndian32(cookieBytes, (UInt32)values[0]);
+    cookieBytes[4] = (unsigned char)values[1];
+    cookieBytes[5] = (unsigned char)values[2];
+    cookieBytes[6] = (unsigned char)values[3];
+    cookieBytes[7] = (unsigned char)values[4];
+    cookieBytes[8] = (unsigned char)values[5];
+    cookieBytes[9] = (unsigned char)values[6];
+    PowerPlayWriteBigEndian16(cookieBytes + 10, (UInt16)values[7]);
+    PowerPlayWriteBigEndian32(cookieBytes + 12, (UInt32)values[8]);
+    PowerPlayWriteBigEndian32(cookieBytes + 16, (UInt32)values[9]);
+    PowerPlayWriteBigEndian32(cookieBytes + 20, (UInt32)values[10]);
+    NSData *magicCookie = [NSData dataWithBytes:cookieBytes length:sizeof(cookieBytes)];
+
+    AudioStreamBasicDescription alacFormat;
+    memset(&alacFormat, 0, sizeof(alacFormat));
+    alacFormat.mSampleRate = (Float64)values[10];
+    alacFormat.mFormatID = 'alac';
+    alacFormat.mChannelsPerFrame = (UInt32)values[6];
+    alacFormat.mFramesPerPacket = (UInt32)values[0];
+
+    outputFormat.mSampleRate = alacFormat.mSampleRate;
+    outputFormat.mFormatID = kAudioFormatLinearPCM;
+    outputFormat.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    outputFormat.mBitsPerChannel = 16;
+    outputFormat.mChannelsPerFrame = alacFormat.mChannelsPerFrame;
+    outputFormat.mBytesPerPacket = outputFormat.mChannelsPerFrame * 2;
+    outputFormat.mFramesPerPacket = 1;
+    outputFormat.mBytesPerFrame = outputFormat.mChannelsPerFrame * 2;
+    outputFormat.mReserved = 0;
+
+    if (converter != NULL) {
+        AudioConverterDispose(converter);
+        converter = NULL;
+    }
+    hasConverter = NO;
+    OSStatus status = AudioConverterNew(&alacFormat, &outputFormat, &converter);
+    if (status != noErr || converter == NULL) {
+        converter = NULL;
+        NSLog(@"ALAC: AudioConverterNew failed for Apple Lossless (%d)", (int)status);
+        return NO;
+    }
+
+    status = AudioConverterSetProperty(converter, kAudioConverterDecompressionMagicCookie,
+                                       (UInt32)[magicCookie length], [magicCookie bytes]);
+    if (status != noErr) {
+        NSLog(@"ALAC: could not set Apple Lossless magic cookie (%d)", (int)status);
+        AudioConverterDispose(converter);
+        converter = NULL;
+        return NO;
+    }
+
+    inputFormat = alacFormat;
+    hasConverter = YES;
+    loggedDecodeFailure = NO;
+    [self reset];
+    return YES;
 }
 
 - (void)dealloc {
@@ -41,17 +190,19 @@
         AudioConverterDispose(converter);
         converter = NULL;
     }
-    [decodeBuffer release];
     [pendingFrameData release];
     [lastFrameInfo release];
     [super dealloc];
 }
 
 - (void)reset {
-    [decodeBuffer setLength:0];
     [pendingFrameData setLength:0];
     [lastFrameInfo release];
     lastFrameInfo = nil;
+    loggedDecodeFailure = NO;
+    if (converter != NULL) {
+        AudioConverterReset(converter);
+    }
 }
 
 - (BOOL)validatePacketAgainstSenderModel:(NSData *)packetData {
@@ -196,101 +347,41 @@
 }
 
 - (NSData *)decodePacket:(NSData *)packetData {
-    if (packetData == nil || [packetData length] == 0) {
+    if (packetData == nil || [packetData length] == 0 || !hasConverter || converter == NULL) {
         return nil;
     }
 
-    if (!hasConverter) {
-        return nil;
-    }
-
-    if (![self validatePacketAgainstSenderModel:packetData]) {
-        return nil;
-    }
-
-    NSData *completeFrame = [self reassembleALACFrame:packetData];
-    if (completeFrame == nil) {
-        return nil;
-    }
-
-    NSDictionary *frameInfo = [self parseFrameHeader:completeFrame];
-    unsigned long headerLength = [[frameInfo objectForKey:@"headerLength"] unsignedLongValue];
-    unsigned long payloadLength = [[frameInfo objectForKey:@"payloadLength"] unsignedLongValue];
-    unsigned long channels = [[frameInfo objectForKey:@"channels"] unsignedLongValue];
-    unsigned long samplesPerFrame = [[frameInfo objectForKey:@"samplesPerFrame"] unsignedLongValue];
-    if (channels == 0) {
-        channels = 2;
-    }
-    if (samplesPerFrame == 0) {
-        samplesPerFrame = 512;
-    }
-
-    if (payloadLength == 0 || payloadLength < (headerLength + 2)) {
-        return nil;
-    }
-
-    unsigned long totalSamples = samplesPerFrame * channels;
-    if (totalSamples == 0) {
-        totalSamples = payloadLength / (2 * channels);
-    }
-    if (totalSamples == 0) {
-        return nil;
-    }
-
-    const unsigned char *bytes = [completeFrame bytes];
-    unsigned long bodyLength = [completeFrame length] - headerLength;
-    if (bodyLength == 0) {
-        NSMutableData *pcmData = [NSMutableData dataWithLength:totalSamples * 2];
-        if (pcmData == nil) {
-            return nil;
-        }
-        memset([pcmData mutableBytes], 0, [pcmData length]);
-        [decodeBuffer appendData:pcmData];
-        return pcmData;
-    }
-
-    NSMutableData *pcmData = [NSMutableData dataWithLength:totalSamples * 2];
+    UInt32 framesPerPacket = inputFormat.mFramesPerPacket;
+    UInt32 outputCapacity = framesPerPacket * outputFormat.mBytesPerFrame;
+    NSMutableData *pcmData = [NSMutableData dataWithLength:outputCapacity];
     if (pcmData == nil) {
         return nil;
     }
 
-    int32_t previousSample[8] = {0};
-    uint16_t *samples = (uint16_t *)[pcmData mutableBytes];
-    unsigned long payloadOffset = headerLength;
-    unsigned long sampleIndex = 0;
+    PowerPlayALACInput input;
+    input.packetData = packetData;
+    input.channels = inputFormat.mChannelsPerFrame;
+    input.suppliedPacket = NO;
 
-    while (payloadOffset + 1 < [completeFrame length] && sampleIndex < totalSamples) {
-        unsigned long channelIndex = sampleIndex % channels;
-        if (channelIndex >= 8) {
-            channelIndex = 7;
+    AudioBufferList output;
+    output.mNumberBuffers = 1;
+    output.mBuffers[0].mNumberChannels = outputFormat.mChannelsPerFrame;
+    output.mBuffers[0].mDataByteSize = outputCapacity;
+    output.mBuffers[0].mData = [pcmData mutableBytes];
+    UInt32 outputPacketCount = framesPerPacket;
+    OSStatus status = AudioConverterFillComplexBuffer(converter, PowerPlayALACInputProc,
+                                                       &input, &outputPacketCount,
+                                                       &output, NULL);
+    if (status != noErr || output.mBuffers[0].mDataByteSize == 0) {
+        if (!loggedDecodeFailure) {
+            NSLog(@"ALAC: AudioConverterFillComplexBuffer failed (%d), output packets=%u",
+                  (int)status, outputPacketCount);
+            loggedDecodeFailure = YES;
         }
-
-        int16_t residual = (int16_t)((((uint16_t)bytes[payloadOffset] << 8) & 0xFF00u) | ((uint16_t)bytes[payloadOffset + 1] & 0x00FFu));
-        payloadOffset += 2;
-
-        int32_t decoded = previousSample[channelIndex] + residual;
-        if (decoded < -32768) {
-            decoded = -32768;
-        }
-        if (decoded > 32767) {
-            decoded = 32767;
-        }
-        previousSample[channelIndex] = decoded;
-        samples[sampleIndex] = (uint16_t)decoded;
-        sampleIndex++;
+        return nil;
     }
 
-    while (sampleIndex < totalSamples) {
-        unsigned long channelIndex = sampleIndex % channels;
-        if (channelIndex >= 8) {
-            channelIndex = 7;
-        }
-        previousSample[channelIndex] = previousSample[channelIndex] + 1;
-        samples[sampleIndex] = (uint16_t)previousSample[channelIndex];
-        sampleIndex++;
-    }
-
-    [decodeBuffer appendData:pcmData];
+    [pcmData setLength:output.mBuffers[0].mDataByteSize];
     return pcmData;
 }
 
