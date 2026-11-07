@@ -2,6 +2,7 @@
 
 #import <sys/socket.h>
 #import <sys/select.h>
+#import <sys/time.h>
 #import <netinet/in.h>
 #import <net/if.h>
 #import <net/if_dl.h>
@@ -44,6 +45,21 @@ static float PowerPlayDecibelsFromLinearGain(float gain) {
         return 0.0f;
     }
     return 20.0f * log10f(gain);
+}
+
+static void PowerPlayWriteNTPTime(unsigned char *bytes) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    uint64_t seconds = (uint64_t)now.tv_sec + 2208988800ULL;
+    uint64_t fraction = ((uint64_t)now.tv_usec << 32) / 1000000ULL;
+    bytes[0] = (unsigned char)(seconds >> 24);
+    bytes[1] = (unsigned char)(seconds >> 16);
+    bytes[2] = (unsigned char)(seconds >> 8);
+    bytes[3] = (unsigned char)seconds;
+    bytes[4] = (unsigned char)(fraction >> 24);
+    bytes[5] = (unsigned char)(fraction >> 16);
+    bytes[6] = (unsigned char)(fraction >> 8);
+    bytes[7] = (unsigned char)fraction;
 }
 
 extern PowerPlayBIO *BIO_new_file(const char *filename, const char *mode);
@@ -712,6 +728,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                              toTarget:self
                            withObject:nil];
         [NSThread detachNewThreadSelector:@selector(receiveAudioPackets)
+                                                         toTarget:self
+                                                     withObject:nil];
+        [NSThread detachNewThreadSelector:@selector(receiveControlPackets)
+                                                         toTarget:self
+                                                     withObject:nil];
+        [NSThread detachNewThreadSelector:@selector(receiveTimingPackets)
                                                          toTarget:self
                                                      withObject:nil];
 
@@ -1420,6 +1442,148 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
 
     NSLog(@"RAOP: audio RTP receiver stopped after %lu datagrams", packetCount);
+    [threadPool drain];
+}
+
+- (void)receiveControlPackets {
+    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    unsigned long packetCount = 0;
+    NSLog(@"RAOP: RTP control receiver started");
+
+    while (acceptingRTSP) {
+        int socketHandle = rtpControlSocket;
+        if (socketHandle < 0 || !isSetupComplete) {
+            usleep(100000);
+            continue;
+        }
+
+        fd_set readSockets;
+        FD_ZERO(&readSockets);
+        FD_SET(socketHandle, &readSockets);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 250000;
+        int ready = select(socketHandle + 1, &readSockets, NULL, NULL, &timeout);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (!acceptingRTSP) {
+                break;
+            }
+            if (socketHandle == rtpControlSocket && isSetupComplete) {
+                NSLog(@"RAOP: RTP control select failed (%d)", errno);
+                usleep(100000);
+            }
+            continue;
+        }
+        if (ready == 0 || !FD_ISSET(socketHandle, &readSockets) ||
+            socketHandle != rtpControlSocket || !isSetupComplete) {
+            continue;
+        }
+
+        unsigned char packet[2048];
+        struct sockaddr_in sender;
+        socklen_t senderLength = sizeof(sender);
+        ssize_t received = recvfrom(socketHandle, packet, sizeof(packet), 0,
+                                    (struct sockaddr *)&sender, &senderLength);
+        if (received > 0) {
+            packetCount++;
+            if (packetCount == 1 || packetCount % 100 == 0) {
+                NSLog(@"RAOP: received %lu RTP control packets; latest type=0x%02x length=%ld",
+                      packetCount, received > 1 ? packet[1] : 0, (long)received);
+            }
+        } else if (received < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+            NSLog(@"RAOP: RTP control receive failed (%d)", errno);
+        }
+    }
+
+    NSLog(@"RAOP: RTP control receiver stopped after %lu packets", packetCount);
+    [threadPool drain];
+}
+
+- (void)receiveTimingPackets {
+    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    unsigned long requestCount = 0;
+    unsigned long replyCount = 0;
+    NSLog(@"RAOP: RTP timing responder started");
+
+    while (acceptingRTSP) {
+        int socketHandle = timingSocket;
+        if (socketHandle < 0 || !isSetupComplete) {
+            usleep(100000);
+            continue;
+        }
+
+        fd_set readSockets;
+        FD_ZERO(&readSockets);
+        FD_SET(socketHandle, &readSockets);
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 250000;
+        int ready = select(socketHandle + 1, &readSockets, NULL, NULL, &timeout);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (!acceptingRTSP) {
+                break;
+            }
+            if (socketHandle == timingSocket && isSetupComplete) {
+                NSLog(@"RAOP: RTP timing select failed (%d)", errno);
+                usleep(100000);
+            }
+            continue;
+        }
+        if (ready == 0 || !FD_ISSET(socketHandle, &readSockets) ||
+            socketHandle != timingSocket || !isSetupComplete) {
+            continue;
+        }
+
+        unsigned char request[2048];
+        struct sockaddr_in sender;
+        socklen_t senderLength = sizeof(sender);
+        ssize_t received = recvfrom(socketHandle, request, sizeof(request), 0,
+                                    (struct sockaddr *)&sender, &senderLength);
+        if (received < 0) {
+            if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+                NSLog(@"RAOP: RTP timing receive failed (%d)", errno);
+            }
+            continue;
+        }
+
+        requestCount++;
+        if (received < 32 || (request[0] & 0xC0) != 0x80 || request[1] != 0xD2) {
+            if (requestCount == 1) {
+                NSLog(@"RAOP: ignored non-timing packet on timing port (%ld bytes, type=0x%02x)",
+                      (long)received, received > 1 ? request[1] : 0);
+            }
+            continue;
+        }
+
+        unsigned char response[32];
+        memset(response, 0, sizeof(response));
+        response[0] = 0x80;
+        response[1] = 0xD3;
+        memcpy(response + 2, request + 2, 2);
+        memcpy(response + 8, request + 24, 8);
+        PowerPlayWriteNTPTime(response + 16);
+        PowerPlayWriteNTPTime(response + 24);
+
+        ssize_t sent = sendto(socketHandle, response, sizeof(response), 0,
+                              (struct sockaddr *)&sender, senderLength);
+        if (sent == (ssize_t)sizeof(response)) {
+            replyCount++;
+            if (replyCount == 1 || replyCount % 100 == 0) {
+                NSLog(@"RAOP: replied to %lu RTP timing requests", replyCount);
+            }
+        } else if (sent < 0) {
+            NSLog(@"RAOP: RTP timing reply failed (%d)", errno);
+        }
+    }
+
+    NSLog(@"RAOP: RTP timing responder stopped after %lu requests and %lu replies",
+          requestCount, replyCount);
     [threadPool drain];
 }
 
