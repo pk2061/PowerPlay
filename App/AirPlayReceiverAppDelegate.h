@@ -8,7 +8,7 @@
 @protocol NSApplicationDelegate;
 #endif
 
-@interface AirPlayReceiverAppDelegate : NSObject {
+@interface AirPlayReceiverAppDelegate : NSObject <NSApplicationDelegate> {
     NSWindow *window;
     NSButton *playPauseButton;
     NSButton *nextButton;
