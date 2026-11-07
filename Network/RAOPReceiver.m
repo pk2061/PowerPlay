@@ -15,6 +15,11 @@
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
 
+enum {
+    PowerPlayRSAPKCS1Padding = 1,
+    PowerPlayRSAOAEPPadding = 4
+};
+
 extern PowerPlayBIO *BIO_new_file(const char *filename, const char *mode);
 extern PowerPlayRSA *PEM_read_bio_RSAPrivateKey(PowerPlayBIO *bio, PowerPlayRSA **rsa, void *callback, void *userData);
 extern int BIO_free(PowerPlayBIO *bio);
@@ -200,7 +205,7 @@ static NSString *PowerPlayAppleResponse(NSString *challenge, int socketHandle, N
     int signatureCapacity = RSA_size(privateKey);
     unsigned char *signature = (unsigned char *)malloc((size_t)signatureCapacity);
     int signatureLength = signature == NULL ? -1 : RSA_private_encrypt(
-        (int)signedLength, signedData, signature, privateKey, 1);
+        (int)signedLength, signedData, signature, privateKey, PowerPlayRSAPKCS1Padding);
     RSA_free(privateKey);
     if (signatureLength <= 0) {
         free(signature);
@@ -227,7 +232,7 @@ static NSData *PowerPlayDecryptAudioKey(NSData *encryptedKey) {
     int decryptedCapacity = RSA_size(privateKey);
     unsigned char *decryptedKey = decryptedCapacity > 0 ? (unsigned char *)malloc((size_t)decryptedCapacity) : NULL;
     int decryptedLength = decryptedKey == NULL ? -1 : RSA_private_decrypt(
-        (int)[encryptedKey length], [encryptedKey bytes], decryptedKey, privateKey, 1);
+        (int)[encryptedKey length], [encryptedKey bytes], decryptedKey, privateKey, PowerPlayRSAOAEPPadding);
     RSA_free(privateKey);
 
     if (decryptedLength != 16) {
