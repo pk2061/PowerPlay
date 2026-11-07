@@ -1,6 +1,5 @@
 #import "RAOPReceiver.h"
 
-#import <CommonCrypto/CommonCryptor.h>
 #import <sys/socket.h>
 #import <sys/select.h>
 #import <netinet/in.h>
@@ -15,10 +14,15 @@
 
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
+typedef struct {
+    unsigned int roundKeys[60];
+    int rounds;
+} PowerPlayAESKey;
 
 enum {
     PowerPlayRSAPKCS1Padding = 1,
-    PowerPlayRSAOAEPPadding = 4
+    PowerPlayRSAOAEPPadding = 4,
+    PowerPlayAESDecrypt = 0
 };
 
 extern PowerPlayBIO *BIO_new_file(const char *filename, const char *mode);
@@ -28,6 +32,9 @@ extern int RSA_size(const PowerPlayRSA *rsa);
 extern int RSA_private_encrypt(int inputLength, const unsigned char *input, unsigned char *output, PowerPlayRSA *rsa, int padding);
 extern int RSA_private_decrypt(int inputLength, const unsigned char *input, unsigned char *output, PowerPlayRSA *rsa, int padding);
 extern void RSA_free(PowerPlayRSA *rsa);
+extern int AES_set_decrypt_key(const unsigned char *userKey, int bits, PowerPlayAESKey *key);
+extern void AES_cbc_encrypt(const unsigned char *input, unsigned char *output, size_t length,
+                            const PowerPlayAESKey *key, unsigned char *ivec, int enc);
 
 static NSString *PowerPlayDeviceIdentifier(void) {
     struct ifaddrs *interfaces = NULL;
@@ -346,14 +353,16 @@ static NSData *PowerPlayDecryptRTPPayload(NSData *packet, NSRange payloadRange, 
     NSMutableData *decrypted = [NSMutableData dataWithLength:payloadRange.length];
     const unsigned char *input = (const unsigned char *)[packet bytes] + payloadRange.location;
     unsigned char *output = [decrypted mutableBytes];
-    size_t decryptedLength = 0;
-    CCCryptorStatus status = CCCrypt(kCCDecrypt, kCCAlgorithmAES128, 0,
-                                     [key bytes], [key length], [iv bytes],
-                                     input, encryptedLength, output, encryptedLength,
-                                     &decryptedLength);
-    if (status != kCCSuccess || decryptedLength != encryptedLength) {
+    PowerPlayAESKey keySchedule;
+    unsigned char ivCopy[16];
+    memset(&keySchedule, 0, sizeof(keySchedule));
+    memcpy(ivCopy, [iv bytes], sizeof(ivCopy));
+    if (AES_set_decrypt_key([key bytes], 128, &keySchedule) != 0) {
+        memset(&keySchedule, 0, sizeof(keySchedule));
         return nil;
     }
+    AES_cbc_encrypt(input, output, encryptedLength, &keySchedule, ivCopy, PowerPlayAESDecrypt);
+    memset(&keySchedule, 0, sizeof(keySchedule));
 
     if (encryptedLength < payloadRange.length) {
         memcpy(output + encryptedLength, input + encryptedLength, payloadRange.length - encryptedLength);
