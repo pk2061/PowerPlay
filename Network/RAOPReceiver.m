@@ -15,6 +15,7 @@
 #import <math.h>
 
 NSString * const PowerPlayMetadataDidChangeNotification = @"PowerPlayMetadataDidChangeNotification";
+NSString * const PowerPlayVolumeDidChangeNotification = @"PowerPlayVolumeDidChangeNotification";
 
 typedef struct bio_st PowerPlayBIO;
 typedef struct rsa_st PowerPlayRSA;
@@ -1013,11 +1014,20 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                         NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
                         if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
                             [scanner scanFloat:&parsedVolume]) {
-                            volume = PowerPlayLinearGainFromDecibels(parsedVolume);
-                            [audioPlayer setVolume:volume];
+                            float newVolume = PowerPlayLinearGainFromDecibels(parsedVolume);
+                            BOOL volumeChanged;
+                            @synchronized(self) {
+                                volumeChanged = fabsf(volume - newVolume) > 0.0001f;
+                                volume = newVolume;
+                            }
+                            [audioPlayer setVolume:newVolume];
+                            if (volumeChanged) {
+                                [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayVolumeDidChangeNotification
+                                                                                    object:self];
+                            }
                         }
                         responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
-                            PowerPlayDecibelsFromLinearGain(volume)];
+                            PowerPlayDecibelsFromLinearGain([self volumeValue])];
                     } else {
                         responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
                     }
@@ -1031,7 +1041,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             if ([requestParameter length] > 0) {
                 if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                     responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
-                        PowerPlayDecibelsFromLinearGain(volume)];
+                        PowerPlayDecibelsFromLinearGain([self volumeValue])];
                 } else if ([requestParameter rangeOfString:@"position" options:NSCaseInsensitiveSearch].location != NSNotFound) {
                     responseBody = @"position: 0.000000\r\n";
                 } else {
@@ -1039,7 +1049,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 }
             } else {
                 responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
-                    PowerPlayDecibelsFromLinearGain(volume)];
+                    PowerPlayDecibelsFromLinearGain([self volumeValue])];
             }
         } else {
             status = @"501 Not Implemented";
@@ -1841,6 +1851,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             albumName = [newAlbum copy];
             changed = YES;
         }
+        if (titleChanged && (![newAlbum isKindOfClass:[NSString class]] || [newAlbum length] == 0) &&
+            albumName != nil) {
+            [albumName release];
+            albumName = nil;
+            changed = YES;
+        }
         if ([newCoverData isKindOfClass:[NSData class]] && [newCoverData length] > 0 &&
             ![newCoverData isEqualToData:coverArtData]) {
             [coverArtData release];
@@ -2248,16 +2264,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)setVolume:(float)newVolume {
-    volume = newVolume;
-    if (volume < 0.0f) {
-        volume = 0.0f;
+    if (newVolume < 0.0f) {
+        newVolume = 0.0f;
     }
-    if (volume > 1.0f) {
-        volume = 1.0f;
+    if (newVolume > 1.0f) {
+        newVolume = 1.0f;
     }
-    [audioPlayer setVolume:volume];
+    @synchronized(self) {
+        volume = newVolume;
+    }
+    [audioPlayer setVolume:newVolume];
 
-    NSString *level = [NSString stringWithFormat:@"%.3f", PowerPlayDecibelsFromLinearGain(volume)];
+    NSString *level = [NSString stringWithFormat:@"%.3f", PowerPlayDecibelsFromLinearGain(newVolume)];
     [self sendRTSPCommand:@"SET_PARAMETER" path:@"/" headers:[NSDictionary dictionaryWithObject:level forKey:@"volume"] body:nil];
 }
 
@@ -2289,7 +2307,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (float)volumeValue {
-    return volume;
+    @synchronized(self) {
+        return volume;
+    }
 }
 
 - (NSData *)coverArtData {

@@ -24,6 +24,7 @@ typedef unsigned long NSUInteger;
 #import "CoreAudioPlayer.h"
 
 extern NSString * const PowerPlayMetadataDidChangeNotification;
+extern NSString * const PowerPlayVolumeDidChangeNotification;
 
 @interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
     NSNetService *publishedService;

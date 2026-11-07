@@ -11,6 +11,10 @@
                                                selector:@selector(receiverMetadataDidChange:)
                                                    name:PowerPlayMetadataDidChangeNotification
                                                  object:receiver];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                                                                             selector:@selector(receiverMetadataDidChange:)
+                                                                                                     name:PowerPlayVolumeDidChangeNotification
+                                                                                                 object:receiver];
     growlNotifier = [[GrowlNotifier alloc] init];
     lastGrowlTitle = nil;
     [self buildUI];
@@ -154,7 +158,7 @@
 
     NSString *album = [receiver albumName];
     if (album == nil || [album length] == 0) {
-        album = @"Current Track";
+        album = @"";
     }
 
     NSImage *notificationImage = nil;
@@ -231,8 +235,11 @@
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     NSLog(@"PowerPlay: applicationWillTerminate");
-        [[NSNotificationCenter defaultCenter] removeObserver:self
+    [[NSNotificationCenter defaultCenter] removeObserver:self
                                                                                                         name:PowerPlayMetadataDidChangeNotification
+                                                                                                    object:receiver];
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                                                                        name:PowerPlayVolumeDidChangeNotification
                                                                                                     object:receiver];
     [receiver stopReceiver];
     [growlNotifier release];
