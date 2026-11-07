@@ -22,10 +22,10 @@ static OSStatus PowerPlayALACInputProc(AudioConverterRef converter,
         return noErr;
     }
 
-    NSUInteger packetLength = [input->packetData length];
+    unsigned long packetLength = [input->packetData length];
     if (packetLength == 0 || packetLength > UINT32_MAX) {
         *packetCount = 0;
-        return kAudio_ParamError;
+        return paramErr;
     }
 
     inputData->mNumberBuffers = 1;
@@ -94,7 +94,7 @@ static void PowerPlayWriteBigEndian32(unsigned char *bytes, UInt32 value) {
     int values[11];
     BOOL foundFormat = NO;
     NSArray *lines = [sdp componentsSeparatedByString:@"\n"];
-    NSUInteger lineIndex;
+    unsigned long lineIndex;
     for (lineIndex = 0; lineIndex < [lines count]; lineIndex++) {
         NSString *line = [[lines objectAtIndex:lineIndex]
             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -107,7 +107,7 @@ static void PowerPlayWriteBigEndian32(unsigned char *bytes, UInt32 value) {
         if (![scanner scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:&prefix]) {
             continue;
         }
-        NSUInteger valueIndex;
+        unsigned long valueIndex;
         for (valueIndex = 0; valueIndex < 11; valueIndex++) {
             if (![scanner scanInt:&values[valueIndex]]) {
                 break;
