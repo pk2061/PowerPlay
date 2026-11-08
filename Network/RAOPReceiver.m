@@ -1110,8 +1110,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 contentType = @"text/parameters";
                 if ([requestParameter length] > 0) {
                     BOOL handledParameter = NO;
-                    NSArray *parameterLines = [requestParameter componentsSeparatedByCharactersInSet:
-                        [NSCharacterSet characterSetWithCharactersInString:@"\r\n"]];
+                    NSArray *parameterLines = [requestParameter componentsSeparatedByString:@"\n"];
                     NSUInteger parameterIndex;
                     for (parameterIndex = 0; parameterIndex < [parameterLines count]; parameterIndex++) {
                         NSString *parameterLine = [[parameterLines objectAtIndex:parameterIndex]
