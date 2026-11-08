@@ -858,6 +858,51 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [threadPool drain];
 }
 
+- (void)resetSessionAfterDisconnect {
+    [audioPlayer stop];
+
+    if (audioSocket >= 0) {
+        close(audioSocket);
+        audioSocket = -1;
+    }
+    if (timingSocket >= 0) {
+        close(timingSocket);
+        timingSocket = -1;
+    }
+    if (rtpControlSocket >= 0) {
+        close(rtpControlSocket);
+        rtpControlSocket = -1;
+    }
+
+    @synchronized(self) {
+        isPlaying = NO;
+        rtspSessionEstablished = NO;
+        rtpSessionReady = NO;
+        isSetupComplete = NO;
+        elapsedPlaybackTime = 0.0;
+        trackDuration = 0.0;
+
+        [currentTitle release];
+        currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."];
+        [trackName release];
+        trackName = nil;
+        [artistName release];
+        artistName = nil;
+        [albumName release];
+        albumName = nil;
+        [coverArtData release];
+        coverArtData = nil;
+        [audioAESKey release];
+        audioAESKey = nil;
+        [audioAESIV release];
+        audioAESIV = nil;
+        [hostAddress release];
+        hostAddress = nil;
+    }
+
+    [self notifyMetadataDidChange];
+}
+
 - (void)handleRTSPConnection:(int)incomingSocket {
     struct sockaddr_in peerAddress;
     socklen_t peerLength = sizeof(peerAddress);
@@ -1127,6 +1172,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             break;
         }
     }
+
+    [self resetSessionAfterDisconnect];
 }
 
 - (void)connectToService:(NSNetService *)service {
