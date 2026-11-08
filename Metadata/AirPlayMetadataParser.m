@@ -325,6 +325,15 @@
             metadataKey = @"artist";
         } else if ([tag isEqualToString:@"asal"]) {
             metadataKey = @"album";
+        } else if ([tag isEqualToString:@"astm"] && valueLength == 4) {
+            uint32_t durationMilliseconds = ((uint32_t)valueBytes[0] << 24) |
+                                            ((uint32_t)valueBytes[1] << 16) |
+                                            ((uint32_t)valueBytes[2] << 8) |
+                                            (uint32_t)valueBytes[3];
+            if (durationMilliseconds > 0) {
+                [result setObject:[NSNumber numberWithDouble:(double)durationMilliseconds / 1000.0]
+                           forKey:@"duration"];
+            }
         }
 
         if (metadataKey != nil && valueLength > 0) {

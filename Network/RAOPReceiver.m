@@ -666,6 +666,13 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
         progressReferenceTime = 0.0;
+        lastAudioPacketTime = 0.0;
+        progressResumeOffset = 0.0;
+        lastProgressStartTimestamp = 0;
+        lastProgressCurrentTimestamp = 0;
+        hasProgressTimestamp = NO;
+        resumeProgressPending = NO;
+        progressIsRelative = NO;
         controlPort = 5000;
         audioPort = 6000;
         timingPort = 6002;
@@ -896,6 +903,13 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
         progressReferenceTime = 0.0;
+        lastAudioPacketTime = 0.0;
+        progressResumeOffset = 0.0;
+        lastProgressStartTimestamp = 0;
+        lastProgressCurrentTimestamp = 0;
+        hasProgressTimestamp = NO;
+        resumeProgressPending = NO;
+        progressIsRelative = NO;
 
         [currentTitle release];
         currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."];
@@ -1100,6 +1114,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                     isPlaying = YES;
                     progressReferenceTime = PowerPlayCurrentTime();
                 }
+                NSLog(@"RAOP: sender resumed playback");
                 [audioPlayer start];
                 responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             }
@@ -1111,8 +1126,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                         elapsedPlaybackTime = trackDuration;
                     }
                 }
+                progressResumeOffset = elapsedPlaybackTime;
+                resumeProgressPending = YES;
+                progressIsRelative = NO;
                 progressReferenceTime = 0.0;
                 isPlaying = NO;
+                NSLog(@"RAOP: sender paused playback at %.1f seconds", elapsedPlaybackTime);
             }
             [audioPlayer stop];
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
@@ -1195,17 +1214,47 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                     double newElapsed = (double)elapsedFrames / 44100.0;
                                     BOOL progressChanged;
                                     @synchronized(self) {
-                                        progressChanged = fabs(elapsedPlaybackTime - newElapsed) >= 0.05 ||
+                                        double now = PowerPlayCurrentTime();
+                                        BOOL audioRecentlyActive = lastAudioPacketTime == 0.0 ||
+                                            now - lastAudioPacketTime <= 1.5;
+                                        BOOL playbackActive = isPlaying && audioRecentlyActive;
+                                        if (playbackActive) {
+                                            if (resumeProgressPending) {
+                                                double previousProgressElapsed =
+                                                    (double)(lastProgressCurrentTimestamp - lastProgressStartTimestamp) / 44100.0;
+                                                progressIsRelative = !hasProgressTimestamp ||
+                                                    startTimestamp != lastProgressStartTimestamp ||
+                                                    newElapsed + 0.5 < previousProgressElapsed ||
+                                                    newElapsed + 0.5 < progressResumeOffset;
+                                                resumeProgressPending = NO;
+                                            }
+                                            if (progressIsRelative) {
+                                                newElapsed += progressResumeOffset;
+                                            }
+                                        }
+                                        double displayElapsed = playbackActive ? newElapsed : elapsedPlaybackTime;
+                                        progressChanged = fabs(elapsedPlaybackTime - displayElapsed) >= 0.05 ||
                                                           fabs(trackDuration - newDuration) >= 0.05;
-                                        elapsedPlaybackTime = newElapsed;
+                                        if (playbackActive) {
+                                            elapsedPlaybackTime = newElapsed;
+                                            progressReferenceTime = now;
+                                            lastProgressStartTimestamp = startTimestamp;
+                                            lastProgressCurrentTimestamp = currentTimestamp;
+                                            hasProgressTimestamp = YES;
+                                        }
                                         trackDuration = newDuration;
-                                        progressReferenceTime = PowerPlayCurrentTime();
                                     }
                                     if (progressChanged) {
+                                        NSLog(@"RAOP: progress %.1f / %.1f seconds",
+                                              newElapsed, newDuration);
                                         [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayPlaybackProgressDidChangeNotification
                                                                                             object:self];
                                     }
+                                } else {
+                                    NSLog(@"RAOP: ignored progress with invalid duration/current range: %@", parameterValue);
                                 }
+                            } else {
+                                NSLog(@"RAOP: ignored malformed progress tuple: %@", parameterValue);
                             }
                         }
                     }
@@ -1641,6 +1690,19 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             struct timeval packetTime;
             gettimeofday(&packetTime, NULL);
             lastAudioPacketMicros = (uint64_t)packetTime.tv_sec * 1000000ULL + (uint64_t)packetTime.tv_usec;
+            double packetTimeSeconds = (double)packetTime.tv_sec + ((double)packetTime.tv_usec / 1000000.0);
+            @synchronized(self) {
+                if (isPlaying && lastAudioPacketTime > 0.0 &&
+                    packetTimeSeconds - lastAudioPacketTime > 1.5) {
+                    double activeUntil = lastAudioPacketTime + 1.5;
+                    if (progressReferenceTime > 0.0 && activeUntil > progressReferenceTime) {
+                        elapsedPlaybackTime += activeUntil - progressReferenceTime;
+                    }
+                    progressReferenceTime = packetTimeSeconds;
+                    NSLog(@"RAOP: audio RTP resumed after silence");
+                }
+                lastAudioPacketTime = packetTimeSeconds;
+            }
             loggedAudioSilence = NO;
             NSData *packet = [NSData dataWithBytes:packetBuffer length:(NSUInteger)received];
             NSRange payloadRange;
@@ -2017,6 +2079,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSString *newArtist = [parsedMetadata objectForKey:@"artist"];
     NSString *newAlbum = [parsedMetadata objectForKey:@"album"];
     NSData *newCoverData = [parsedMetadata objectForKey:@"coverArtData"];
+    NSNumber *newTrackDuration = [parsedMetadata objectForKey:@"duration"];
 
     @synchronized(self) {
         if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
@@ -2029,6 +2092,20 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             titleChanged = YES;
             elapsedPlaybackTime = 0.0;
             trackDuration = 0.0;
+            progressResumeOffset = 0.0;
+            lastProgressStartTimestamp = 0;
+            lastProgressCurrentTimestamp = 0;
+            hasProgressTimestamp = NO;
+            resumeProgressPending = NO;
+            progressIsRelative = NO;
+            progressReferenceTime = isPlaying ? PowerPlayCurrentTime() : 0.0;
+        }
+        if ([newTrackDuration respondsToSelector:@selector(doubleValue)] &&
+            [newTrackDuration doubleValue] > 0.0 &&
+            fabs(trackDuration - [newTrackDuration doubleValue]) >= 0.05) {
+            trackDuration = [newTrackDuration doubleValue];
+            changed = YES;
+            NSLog(@"RAOP: track duration from metadata %.1f seconds", trackDuration);
         }
         if ([newArtist isKindOfClass:[NSString class]] && [newArtist length] > 0 &&
             ![newArtist isEqualToString:artistName]) {
@@ -2527,7 +2604,13 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     @synchronized(self) {
         value = elapsedPlaybackTime;
         if (isPlaying && progressReferenceTime > 0.0) {
-            value += PowerPlayCurrentTime() - progressReferenceTime;
+            double currentTime = PowerPlayCurrentTime();
+            if (lastAudioPacketTime > 0.0 && currentTime - lastAudioPacketTime > 1.5) {
+                currentTime = lastAudioPacketTime + 1.5;
+            }
+            if (currentTime > progressReferenceTime) {
+                value += currentTime - progressReferenceTime;
+            }
             if (trackDuration > 0.0 && value > trackDuration) {
                 value = trackDuration;
             }
@@ -2556,6 +2639,10 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     BOOL value;
     @synchronized(self) {
         value = isPlaying;
+        if (value && lastAudioPacketTime > 0.0 &&
+            PowerPlayCurrentTime() - lastAudioPacketTime > 1.5) {
+            value = NO;
+        }
     }
     return value;
 }
