@@ -24,6 +24,7 @@
     RAOPReceiver *receiver;
     GrowlNotifier *growlNotifier;
     NSString *lastGrowlTitle;
+    BOOL showsRemainingTime;
 }
 
 - (void)installApplicationMenu;
@@ -34,5 +35,6 @@
 - (IBAction)nextTrack:(id)sender;
 - (IBAction)previousTrack:(id)sender;
 - (IBAction)changeVolume:(id)sender;
+- (IBAction)togglePlaybackTimeDisplay:(id)sender;
 
 @end

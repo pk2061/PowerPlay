@@ -661,6 +661,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         timingPort = 6002;
         rtpControlPort = 6001;
         senderTimingPort = 0;
+        incomingSessionActive = NO;
+        connectedDeviceName = nil;
         controlSocket = -1;
         audioSocket = -1;
         timingSocket = -1;
@@ -716,6 +718,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
     [publishedService release];
     [deviceIdentifier release];
+    [connectedDeviceName release];
     [currentTitle release];
     [coverArtData release];
     [resolvedService release];
@@ -875,6 +878,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
 
     @synchronized(self) {
+        incomingSessionActive = NO;
         isPlaying = NO;
         rtspSessionEstablished = NO;
         rtpSessionReady = NO;
@@ -896,6 +900,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         audioAESKey = nil;
         [audioAESIV release];
         audioAESIV = nil;
+        [connectedDeviceName release];
+        connectedDeviceName = nil;
         [hostAddress release];
         hostAddress = nil;
     }
@@ -907,10 +913,19 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     struct sockaddr_in peerAddress;
     socklen_t peerLength = sizeof(peerAddress);
     memset(&peerAddress, 0, sizeof(peerAddress));
-    if (getpeername(incomingSocket, (struct sockaddr *)&peerAddress, &peerLength) == 0) {
-        [hostAddress release];
-        hostAddress = [[NSString stringWithUTF8String:inet_ntoa(peerAddress.sin_addr)] copy];
+    @synchronized(self) {
+        incomingSessionActive = YES;
+        [connectedDeviceName release];
+        connectedDeviceName = nil;
     }
+    if (getpeername(incomingSocket, (struct sockaddr *)&peerAddress, &peerLength) == 0) {
+        NSString *peerAddressString = [NSString stringWithUTF8String:inet_ntoa(peerAddress.sin_addr)];
+        @synchronized(self) {
+            [hostAddress release];
+            hostAddress = [peerAddressString copy];
+        }
+    }
+    [self notifyMetadataDidChange];
 
     [rtspSessionId release];
     rtspSessionId = [[NSString stringWithFormat:@"PowerPlay-%u-%u",
@@ -938,6 +953,25 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         NSString *method = [[requestParts objectAtIndex:0] uppercaseString];
         NSDictionary *headers = [request objectForKey:@"headers"];
         NSData *requestBodyData = [request objectForKey:@"body"];
+        NSString *reportedClientName = [headers objectForKey:@"x-apple-client-name"];
+        if (reportedClientName == nil || [reportedClientName length] == 0) {
+            reportedClientName = [headers objectForKey:@"x-apple-device-name"];
+        }
+        reportedClientName = [reportedClientName stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([reportedClientName length] > 0) {
+            BOOL clientNameChanged = NO;
+            @synchronized(self) {
+                clientNameChanged = ![reportedClientName isEqualToString:connectedDeviceName];
+                if (clientNameChanged) {
+                    [connectedDeviceName release];
+                    connectedDeviceName = [reportedClientName copy];
+                }
+            }
+            if (clientNameChanged) {
+                [self notifyMetadataDidChange];
+            }
+        }
         NSString *requestBodyText = requestBodyData == nil ? @"" : [[[NSString alloc] initWithData:requestBodyData encoding:NSUTF8StringEncoding] autorelease];
         NSString *requestParameter = requestBodyText == nil ? @"" : [requestBodyText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         NSString *cseq = [headers objectForKey:@"cseq"];
@@ -1075,59 +1109,74 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             } else {
                 contentType = @"text/parameters";
                 if ([requestParameter length] > 0) {
-                    if ([requestParameter rangeOfString:@"volume" options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                        NSScanner *scanner = [NSScanner scannerWithString:requestParameter];
-                        NSString *volumeLabel = nil;
-                        float parsedVolume = 0.0f;
-                        NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-                        if ([scanner scanUpToCharactersFromSet:whitespace intoString:&volumeLabel] &&
-                            [scanner scanFloat:&parsedVolume]) {
-                            float newVolume = PowerPlayLinearGainFromDecibels(parsedVolume);
-                            BOOL volumeChanged;
-                            @synchronized(self) {
-                                volumeChanged = fabsf(volume - newVolume) > 0.0001f;
-                                volume = newVolume;
-                            }
-                            [audioPlayer setVolume:newVolume];
-                            if (volumeChanged) {
-                                [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayVolumeDidChangeNotification
-                                                                                    object:self];
-                            }
-                        }
-                        responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
-                            PowerPlayDecibelsFromLinearGain([self volumeValue])];
-                    } else if ([requestParameter hasPrefix:@"progress:"]) {
-                        NSString *progressValue = [[requestParameter substringFromIndex:[@"progress:" length]]
+                    BOOL handledParameter = NO;
+                    NSArray *parameterLines = [requestParameter componentsSeparatedByCharactersInSet:
+                        [NSCharacterSet newlineCharacterSet]];
+                    NSUInteger parameterIndex;
+                    for (parameterIndex = 0; parameterIndex < [parameterLines count]; parameterIndex++) {
+                        NSString *parameterLine = [[parameterLines objectAtIndex:parameterIndex]
                             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                        NSArray *timestamps = [progressValue componentsSeparatedByString:@"/"];
-                        uint32_t startTimestamp = 0;
-                        uint32_t currentTimestamp = 0;
-                        uint32_t endTimestamp = 0;
-                        if ([timestamps count] == 3 &&
-                            PowerPlayParseUInt32([[timestamps objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &startTimestamp) &&
-                            PowerPlayParseUInt32([[timestamps objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &currentTimestamp) &&
-                            PowerPlayParseUInt32([[timestamps objectAtIndex:2] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &endTimestamp)) {
-                            uint32_t durationFrames = endTimestamp - startTimestamp;
-                            uint32_t elapsedFrames = currentTimestamp - startTimestamp;
-                            if (durationFrames > 0 && elapsedFrames <= durationFrames) {
-                                double newDuration = (double)durationFrames / 44100.0;
-                                double newElapsed = (double)elapsedFrames / 44100.0;
-                                BOOL progressChanged;
+                        NSRange colon = [parameterLine rangeOfString:@":"];
+                        if (colon.location == NSNotFound) {
+                            continue;
+                        }
+                        NSString *parameterName = [[parameterLine substringToIndex:colon.location] lowercaseString];
+                        NSString *parameterValue = [[parameterLine substringFromIndex:colon.location + 1]
+                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+                        if ([parameterName isEqualToString:@"volume"]) {
+                            handledParameter = YES;
+                            NSScanner *scanner = [NSScanner scannerWithString:parameterValue];
+                            float parsedVolume = 0.0f;
+                            if ([scanner scanFloat:&parsedVolume]) {
+                                float newVolume = PowerPlayLinearGainFromDecibels(parsedVolume);
+                                BOOL volumeChanged;
                                 @synchronized(self) {
-                                    progressChanged = fabs(elapsedPlaybackTime - newElapsed) >= 0.05 ||
-                                                      fabs(trackDuration - newDuration) >= 0.05;
-                                    elapsedPlaybackTime = newElapsed;
-                                    trackDuration = newDuration;
+                                    volumeChanged = fabsf(volume - newVolume) > 0.0001f;
+                                    volume = newVolume;
                                 }
-                                if (progressChanged) {
-                                    [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayPlaybackProgressDidChangeNotification
+                                [audioPlayer setVolume:newVolume];
+                                if (volumeChanged) {
+                                    [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayVolumeDidChangeNotification
                                                                                         object:self];
                                 }
                             }
+                            responseBody = [NSString stringWithFormat:@"volume: %.3f\r\n",
+                                PowerPlayDecibelsFromLinearGain([self volumeValue])];
+                        } else if ([parameterName isEqualToString:@"progress"]) {
+                            handledParameter = YES;
+                            NSArray *timestamps = [parameterValue componentsSeparatedByString:@"/"];
+                            uint32_t startTimestamp = 0;
+                            uint32_t currentTimestamp = 0;
+                            uint32_t endTimestamp = 0;
+                            if ([timestamps count] == 3 &&
+                                PowerPlayParseUInt32([[timestamps objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &startTimestamp) &&
+                                PowerPlayParseUInt32([[timestamps objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &currentTimestamp) &&
+                                PowerPlayParseUInt32([[timestamps objectAtIndex:2] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]], &endTimestamp)) {
+                                uint32_t durationFrames = endTimestamp - startTimestamp;
+                                uint32_t elapsedFrames = currentTimestamp - startTimestamp;
+                                if (durationFrames > 0 && elapsedFrames <= durationFrames) {
+                                    double newDuration = (double)durationFrames / 44100.0;
+                                    double newElapsed = (double)elapsedFrames / 44100.0;
+                                    BOOL progressChanged;
+                                    @synchronized(self) {
+                                        progressChanged = fabs(elapsedPlaybackTime - newElapsed) >= 0.05 ||
+                                                          fabs(trackDuration - newDuration) >= 0.05;
+                                        elapsedPlaybackTime = newElapsed;
+                                        trackDuration = newDuration;
+                                    }
+                                    if (progressChanged) {
+                                        [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayPlaybackProgressDidChangeNotification
+                                                                                            object:self];
+                                    }
+                                }
+                            }
                         }
-                        responseBody = @"";
-                    } else {
+                    }
+                    if (!handledParameter) {
                         responseBody = [NSString stringWithFormat:@"%@\r\n", requestParameter];
+                    } else if (responseBody == nil) {
+                        responseBody = @"";
                     }
                 } else {
                     responseBody = @"";
@@ -1320,7 +1369,11 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (BOOL)isConnected {
-    return (controlSocket >= 0) && (hostAddress != nil) && ([hostAddress length] > 0);
+    BOOL hasIncomingSession;
+    @synchronized(self) {
+        hasIncomingSession = incomingSessionActive;
+    }
+    return hasIncomingSession || ((controlSocket >= 0) && (hostAddress != nil) && ([hostAddress length] > 0));
 }
 
 - (BOOL)isSessionReady {
@@ -2391,6 +2444,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
     }
     return [title autorelease];
+}
+
+- (NSString *)connectedDeviceName {
+    NSString *value = nil;
+    @synchronized(self) {
+        value = [connectedDeviceName retain];
+    }
+    return [value autorelease];
 }
 
 - (NSString *)artistName {

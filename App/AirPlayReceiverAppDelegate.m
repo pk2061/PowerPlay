@@ -1,6 +1,20 @@
 #import "AirPlayReceiverAppDelegate.h"
 #import "CoverArtView.h"
 
+@interface PowerPlayClickableTextField : NSTextField
+@end
+
+@implementation PowerPlayClickableTextField
+
+- (void)mouseDown:(NSEvent *)event {
+    (void)event;
+    if ([self target] != nil && [self action] != NULL) {
+        [NSApp sendAction:[self action] to:[self target] from:self];
+    }
+}
+
+@end
+
 @implementation AirPlayReceiverAppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -118,14 +132,16 @@
     [playbackProgress setDoubleValue:0.0];
     [content addSubview:playbackProgress];
 
-    playbackTimeText = [[NSTextField alloc] initWithFrame:NSMakeRect(458, 139, 62, 18)];
+    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(458, 139, 62, 18)];
     [playbackTimeText setEditable:NO];
     [playbackTimeText setBordered:NO];
     [playbackTimeText setDrawsBackground:NO];
     [playbackTimeText setFont:[NSFont systemFontOfSize:10]];
     [playbackTimeText setTextColor:[NSColor grayColor]];
     [playbackTimeText setAlignment:NSRightTextAlignment];
-    [playbackTimeText setStringValue:@"0:00 / --:--"];
+    [playbackTimeText setTarget:self];
+    [playbackTimeText setAction:@selector(togglePlaybackTimeDisplay:)];
+    [playbackTimeText setStringValue:@"0:00 / 0:00"];
     [content addSubview:playbackTimeText];
 
     statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 300, 22)];
@@ -221,8 +237,14 @@
     double duration = [receiver trackDurationValue];
     unsigned long elapsedSeconds = elapsed > 0.0 ? (unsigned long)elapsed : 0;
     unsigned long durationSeconds = duration > 0.0 ? (unsigned long)duration : 0;
-    NSString *durationText = durationSeconds > 0 ?
-        [NSString stringWithFormat:@"%lu:%02lu", durationSeconds / 60, durationSeconds % 60] : @"--:--";
+    unsigned long displayedDuration = durationSeconds;
+    NSString *durationPrefix = @"";
+    if (showsRemainingTime && durationSeconds > 0) {
+        displayedDuration = elapsedSeconds < durationSeconds ? durationSeconds - elapsedSeconds : 0;
+        durationPrefix = @"-";
+    }
+    NSString *durationText = [NSString stringWithFormat:@"%@%lu:%02lu", durationPrefix,
+        displayedDuration / 60, displayedDuration % 60];
     [playbackTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu / %@",
         elapsedSeconds / 60, elapsedSeconds % 60, durationText]];
     double progress = duration > 0.0 ? elapsed / duration : 0.0;
@@ -230,7 +252,14 @@
     if (progress > 1.0) progress = 1.0;
     [playbackProgress setDoubleValue:progress];
 
-    if ([receiver isPlaying]) {
+    if ([receiver isConnected]) {
+        NSString *connectedName = [receiver connectedDeviceName];
+        if (connectedName == nil || [connectedName length] == 0) {
+            connectedName = @"AirPlay device";
+        }
+        [statusText setStringValue:[NSString stringWithFormat:@"Playing via AirPlay from %@", connectedName]];
+        [playPauseButton setTitle:[receiver isPlaying] ? @"Pause" : @"Play"];
+    } else if ([receiver isPlaying]) {
         [statusText setStringValue:@"Playing via AirPlay"];
         [playPauseButton setTitle:@"Pause"];
     } else {
@@ -265,6 +294,12 @@
 
 - (IBAction)changeVolume:(id)sender {
     [receiver setVolume:[volumeSlider floatValue]];
+    [self refreshUI];
+}
+
+- (IBAction)togglePlaybackTimeDisplay:(id)sender {
+    (void)sender;
+    showsRemainingTime = !showsRemainingTime;
     [self refreshUI];
 }
 
