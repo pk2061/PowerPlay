@@ -7,6 +7,7 @@
 #import <net/if.h>
 #import <net/if_dl.h>
 #import <arpa/inet.h>
+#import <netdb.h>
 #import <ifaddrs.h>
 #import <unistd.h>
 #import <string.h>
@@ -69,6 +70,14 @@ static BOOL PowerPlayParseUInt32(NSString *string, uint32_t *value) {
     }
     *value = (uint32_t)parsedValue;
     return YES;
+}
+
+static double PowerPlayCurrentTime(void) {
+    struct timeval now;
+    if (gettimeofday(&now, NULL) != 0) {
+        return 0.0;
+    }
+    return (double)now.tv_sec + ((double)now.tv_usec / 1000000.0);
 }
 
 static void PowerPlayWriteNTPTime(unsigned char *bytes) {
@@ -656,6 +665,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         volume = 0.5f;
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
+        progressReferenceTime = 0.0;
         controlPort = 5000;
         audioPort = 6000;
         timingPort = 6002;
@@ -885,6 +895,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         isSetupComplete = NO;
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
+        progressReferenceTime = 0.0;
 
         [currentTitle release];
         currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."];
@@ -920,9 +931,22 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
     if (getpeername(incomingSocket, (struct sockaddr *)&peerAddress, &peerLength) == 0) {
         NSString *peerAddressString = [NSString stringWithUTF8String:inet_ntoa(peerAddress.sin_addr)];
+        char peerName[NI_MAXHOST];
+        NSString *resolvedPeerName = nil;
+        if (getnameinfo((struct sockaddr *)&peerAddress, peerLength,
+                        peerName, sizeof(peerName), NULL, 0, NI_NAMEREQD) == 0) {
+            resolvedPeerName = [NSString stringWithUTF8String:peerName];
+            if ([[resolvedPeerName lowercaseString] hasSuffix:@".local"]) {
+                resolvedPeerName = [resolvedPeerName substringToIndex:[resolvedPeerName length] - 6];
+            }
+        }
         @synchronized(self) {
             [hostAddress release];
             hostAddress = [peerAddressString copy];
+            if ([resolvedPeerName length] > 0) {
+                [connectedDeviceName release];
+                connectedDeviceName = [resolvedPeerName copy];
+            }
         }
     }
     [self notifyMetadataDidChange];
@@ -1072,12 +1096,24 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             if (!isSetupComplete || (sessionHeader != nil && ![sessionHeader hasPrefix:rtspSessionId])) {
                 status = @"455 Method Not Valid in This State";
             } else {
-                isPlaying = YES;
+                @synchronized(self) {
+                    isPlaying = YES;
+                    progressReferenceTime = PowerPlayCurrentTime();
+                }
                 [audioPlayer start];
                 responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
             }
         } else if ([method isEqualToString:@"PAUSE"]) {
-            isPlaying = NO;
+            @synchronized(self) {
+                if (isPlaying && progressReferenceTime > 0.0) {
+                    elapsedPlaybackTime += PowerPlayCurrentTime() - progressReferenceTime;
+                    if (trackDuration > 0.0 && elapsedPlaybackTime > trackDuration) {
+                        elapsedPlaybackTime = trackDuration;
+                    }
+                }
+                progressReferenceTime = 0.0;
+                isPlaying = NO;
+            }
             [audioPlayer stop];
             responseHeaders = [NSString stringWithFormat:@"Session: %@;timeout=60\r\n", rtspSessionId];
         } else if ([method isEqualToString:@"TEARDOWN"]) {
@@ -1163,6 +1199,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                                           fabs(trackDuration - newDuration) >= 0.05;
                                         elapsedPlaybackTime = newElapsed;
                                         trackDuration = newDuration;
+                                        progressReferenceTime = PowerPlayCurrentTime();
                                     }
                                     if (progressChanged) {
                                         [[NSNotificationCenter defaultCenter] postNotificationName:PowerPlayPlaybackProgressDidChangeNotification
@@ -2489,6 +2526,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     double value;
     @synchronized(self) {
         value = elapsedPlaybackTime;
+        if (isPlaying && progressReferenceTime > 0.0) {
+            value += PowerPlayCurrentTime() - progressReferenceTime;
+            if (trackDuration > 0.0 && value > trackDuration) {
+                value = trackDuration;
+            }
+        }
     }
     return value;
 }
@@ -2510,7 +2553,11 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (BOOL)isPlaying {
-    return isPlaying;
+    BOOL value;
+    @synchronized(self) {
+        value = isPlaying;
+    }
+    return value;
 }
 
 @end

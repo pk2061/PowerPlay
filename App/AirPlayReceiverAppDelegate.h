@@ -25,11 +25,13 @@
     GrowlNotifier *growlNotifier;
     NSString *lastGrowlTitle;
     BOOL showsRemainingTime;
+    NSTimer *playbackRefreshTimer;
 }
 
 - (void)installApplicationMenu;
 - (void)buildUI;
 - (void)refreshUI;
+- (void)refreshPlaybackProgress:(NSTimer *)timer;
 
 - (IBAction)togglePlayPause:(id)sender;
 - (IBAction)nextTrack:(id)sender;

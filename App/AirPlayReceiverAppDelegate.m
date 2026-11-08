@@ -124,7 +124,7 @@
     [albumText setStringValue:@"Current Track"];
     [content addSubview:albumText];
 
-    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(220, 141, 230, 14)];
+    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(220, 141, 208, 14)];
     [playbackProgress setStyle:NSProgressIndicatorBarStyle];
     [playbackProgress setIndeterminate:NO];
     [playbackProgress setMinValue:0.0];
@@ -132,19 +132,21 @@
     [playbackProgress setDoubleValue:0.0];
     [content addSubview:playbackProgress];
 
-    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(458, 139, 62, 18)];
+    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(438, 139, 112, 18)];
     [playbackTimeText setEditable:NO];
     [playbackTimeText setBordered:NO];
     [playbackTimeText setDrawsBackground:NO];
     [playbackTimeText setFont:[NSFont systemFontOfSize:10]];
     [playbackTimeText setTextColor:[NSColor grayColor]];
     [playbackTimeText setAlignment:NSRightTextAlignment];
+    [[playbackTimeText cell] setWraps:NO];
+    [[playbackTimeText cell] setScrollable:YES];
     [playbackTimeText setTarget:self];
     [playbackTimeText setAction:@selector(togglePlaybackTimeDisplay:)];
     [playbackTimeText setStringValue:@"0:00 / 0:00"];
     [content addSubview:playbackTimeText];
 
-    statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 300, 22)];
+    statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 520, 22)];
     [statusText setEditable:NO];
     [statusText setBordered:NO];
     [statusText setDrawsBackground:NO];
@@ -181,6 +183,11 @@
 
     [window makeKeyAndOrderFront:nil];
     [self refreshUI];
+        playbackRefreshTimer = [[NSTimer scheduledTimerWithTimeInterval:1.0
+                                                                                                                             target:self
+                                                                                                                         selector:@selector(refreshPlaybackProgress:)
+                                                                                                                         userInfo:nil
+                                                                                                                            repeats:YES] retain];
 }
 
 - (void)refreshUI {
@@ -233,24 +240,7 @@
     [artistText setStringValue:artist];
     [albumText setStringValue:album];
 
-    double elapsed = [receiver elapsedPlaybackTimeValue];
-    double duration = [receiver trackDurationValue];
-    unsigned long elapsedSeconds = elapsed > 0.0 ? (unsigned long)elapsed : 0;
-    unsigned long durationSeconds = duration > 0.0 ? (unsigned long)duration : 0;
-    unsigned long displayedDuration = durationSeconds;
-    NSString *durationPrefix = @"";
-    if (showsRemainingTime && durationSeconds > 0) {
-        displayedDuration = elapsedSeconds < durationSeconds ? durationSeconds - elapsedSeconds : 0;
-        durationPrefix = @"-";
-    }
-    NSString *durationText = [NSString stringWithFormat:@"%@%lu:%02lu", durationPrefix,
-        displayedDuration / 60, displayedDuration % 60];
-    [playbackTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu / %@",
-        elapsedSeconds / 60, elapsedSeconds % 60, durationText]];
-    double progress = duration > 0.0 ? elapsed / duration : 0.0;
-    if (progress < 0.0) progress = 0.0;
-    if (progress > 1.0) progress = 1.0;
-    [playbackProgress setDoubleValue:progress];
+    [self refreshPlaybackProgress:nil];
 
     if ([receiver isConnected]) {
         NSString *connectedName = [receiver connectedDeviceName];
@@ -265,6 +255,46 @@
     } else {
         [statusText setStringValue:[receiver isConnected] ? @"Ready" : @"Waiting for AirPlay source..."];
         [playPauseButton setTitle:@"Play"];
+    }
+}
+
+- (void)refreshPlaybackProgress:(NSTimer *)timer {
+    (void)timer;
+    double elapsed = [receiver elapsedPlaybackTimeValue];
+    double duration = [receiver trackDurationValue];
+    unsigned long elapsedSeconds = elapsed > 0.0 ? (unsigned long)elapsed : 0;
+    unsigned long durationSeconds = duration > 0.0 ? (unsigned long)duration : 0;
+    unsigned long displayedDuration = durationSeconds;
+    NSString *durationPrefix = @"";
+    if (showsRemainingTime && durationSeconds > 0) {
+        displayedDuration = elapsedSeconds < durationSeconds ? durationSeconds - elapsedSeconds : 0;
+        durationPrefix = @"-";
+    }
+    NSString *durationText = [NSString stringWithFormat:@"%@%lu:%02lu", durationPrefix,
+        displayedDuration / 60, displayedDuration % 60];
+    [playbackTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu / %@",
+        elapsedSeconds / 60, elapsedSeconds % 60, durationText]];
+    BOOL playing = [receiver isPlaying];
+    if (duration > 0.0) {
+        if ([playbackProgress isIndeterminate]) {
+            [playbackProgress stopAnimation:nil];
+            [playbackProgress setIndeterminate:NO];
+        }
+        double progress = elapsed / duration;
+        if (progress < 0.0) progress = 0.0;
+        if (progress > 1.0) progress = 1.0;
+        [playbackProgress setDoubleValue:progress];
+    } else if (playing) {
+        if (![playbackProgress isIndeterminate]) {
+            [playbackProgress setIndeterminate:YES];
+            [playbackProgress startAnimation:nil];
+        }
+    } else {
+        if ([playbackProgress isIndeterminate]) {
+            [playbackProgress stopAnimation:nil];
+            [playbackProgress setIndeterminate:NO];
+        }
+        [playbackProgress setDoubleValue:0.0];
     }
 }
 
@@ -305,6 +335,9 @@
 
 - (void)applicationWillTerminate:(NSNotification *)notification {
     NSLog(@"PowerPlay: applicationWillTerminate");
+    [playbackRefreshTimer invalidate];
+    [playbackRefreshTimer release];
+    playbackRefreshTimer = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self
                                                                                                         name:PowerPlayMetadataDidChangeNotification
                                                                                                     object:receiver];

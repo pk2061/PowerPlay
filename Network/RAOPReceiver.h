@@ -43,6 +43,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
     float volume;
     double elapsedPlaybackTime;
     double trackDuration;
+    double progressReferenceTime;
     NSString *rtspSessionId;
     NSString *hostAddress;
     NSInteger controlPort;
