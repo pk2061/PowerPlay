@@ -23,7 +23,8 @@
     CoverArtView *coverView;
     RAOPReceiver *receiver;
     GrowlNotifier *growlNotifier;
-    NSString *lastGrowlTitle;
+    NSDictionary *lastGrowlTrack;
+    NSDictionary *pendingGrowlTrack;
     BOOL showsRemainingTime;
     NSTimer *playbackRefreshTimer;
 }

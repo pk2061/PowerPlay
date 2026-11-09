@@ -13,24 +13,38 @@
 - (id)init {
     self = [super init];
     if (self != nil) {
-#if AIRPLAY_GROWL_AVAILABLE
+        [[NSDistributedNotificationCenter defaultCenter] addObserver:self
+                                                            selector:@selector(growlDidStart:)
+                                                                name:@"Lend Me Some Sugar; I Am Your Neighbor!"
+                                                              object:nil];
         [self registerApplication];
-#endif
     }
     return self;
 }
 
 - (void)dealloc {
-#if AIRPLAY_GROWL_AVAILABLE
-    [GrowlApplicationBridge setGrowlDelegate:nil];
-#endif
+    [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
     [super dealloc];
 }
 
 - (void)registerApplication {
-#if AIRPLAY_GROWL_AVAILABLE
-    [GrowlApplicationBridge setGrowlDelegate:self];
-#endif
+    NSArray *notifications = [NSArray arrayWithObject:@"Now Playing"];
+    NSMutableDictionary *registration = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+        @"PowerPlay", @"ApplicationName",
+        notifications, @"AllNotifications",
+        notifications, @"DefaultNotifications", nil];
+    NSData *iconData = [[NSApp applicationIconImage] TIFFRepresentation];
+    if (iconData != nil) {
+        [registration setObject:iconData forKey:@"ApplicationIcon"];
+    }
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:@"GrowlApplicationRegistrationNotification"
+                      object:nil userInfo:registration deliverImmediately:YES];
+}
+
+- (void)growlDidStart:(NSNotification *)notification {
+    (void)notification;
+    [self registerApplication];
 }
 
 - (void)notifyTrackTitle:(NSString *)title artist:(NSString *)artist album:(NSString *)album image:(NSImage *)image {
@@ -46,32 +60,40 @@
 
     NSString *albumName = album;
     if (albumName == nil || [albumName length] == 0) {
-        albumName = @"Now Playing";
+        albumName = @"Unknown Album";
     }
 
-#if AIRPLAY_GROWL_AVAILABLE
+    NSImage *sourceImage = image;
+    if (sourceImage == nil || ![sourceImage isValid] ||
+        [sourceImage size].width <= 0.0 || [sourceImage size].height <= 0.0) {
+        sourceImage = [NSApp applicationIconImage];
+    }
     NSData *iconData = nil;
-    if (image != nil) {
-        iconData = [image TIFFRepresentation];
+    if (sourceImage != nil && [sourceImage isValid]) {
+        NSImage *icon = [[NSImage alloc] initWithSize:NSMakeSize(64, 64)];
+        [icon lockFocus];
+        [sourceImage drawInRect:NSMakeRect(0, 0, 64, 64)
+                       fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
+        [icon unlockFocus];
+        iconData = [icon TIFFRepresentation];
+        [icon release];
+    }
+    if (iconData == nil) {
+        iconData = [[NSApp applicationIconImage] TIFFRepresentation];
     }
 
-    NSString *description = [NSString stringWithFormat:@"%@\n%@\n%@",
-                             artistName,
-                             albumName,
-                             trackTitle];
-
-    [GrowlApplicationBridge notifyWithTitle:trackTitle
-                                 description:description
-                            notificationName:@"Now Playing"
-                                    iconData:iconData
-                                    priority:0
-                                    isSticky:NO
-                                clickContext:nil];
-#else
-    (void)artistName;
-    (void)albumName;
-    (void)image;
-#endif
+    NSString *description = [NSString stringWithFormat:@"%@\n%@", artistName, albumName];
+    NSMutableDictionary *details = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+        @"PowerPlay", @"ApplicationName",
+        @"Now Playing", @"NotificationName",
+        trackTitle, @"NotificationTitle",
+        description, @"NotificationDescription", nil];
+    if (iconData != nil) {
+        [details setObject:iconData forKey:@"NotificationIcon"];
+    }
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:@"GrowlNotification"
+                      object:nil userInfo:details deliverImmediately:YES];
 }
 
 @end

@@ -25,7 +25,8 @@ Frameworks:
 - Cocoa
 - CoreAudio
 - AudioToolbox
-- optional: Growl
+
+Optional at runtime: Growl for track notifications; no Growl framework is required.
 
 Notes:
 - PowerPC support requires compiler settings compatible with old GCC and no ARC.

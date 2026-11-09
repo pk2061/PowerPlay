@@ -206,7 +206,8 @@
                                                                                                      name:PowerPlayPlaybackProgressDidChangeNotification
                                                                                                  object:receiver];
     growlNotifier = [[GrowlNotifier alloc] init];
-    lastGrowlTitle = nil;
+    lastGrowlTrack = nil;
+    pendingGrowlTrack = nil;
     [self buildUI];
     [receiver startReceiver];
 }
@@ -406,13 +407,28 @@
         [placeholder release];
     }
 
-    if (growlNotifier != nil && [title length] > 0 && ![title isEqualToString:@"No source connected"] && ![title isEqualToString:lastGrowlTitle]) {
-        [growlNotifier notifyTrackTitle:title artist:artist album:album image:notificationImage];
-        [lastGrowlTitle release];
-        lastGrowlTitle = [title copy];
-    }
-
     [notificationImage release];
+
+    NSString *trackTitle = [receiver trackName];
+    if ([trackTitle length] == 0) {
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendPendingGrowlNotification) object:nil];
+        [pendingGrowlTrack release];
+        pendingGrowlTrack = nil;
+        [lastGrowlTrack release];
+        lastGrowlTrack = nil;
+    } else {
+        NSDictionary *track = [NSDictionary dictionaryWithObjectsAndKeys:
+            trackTitle, @"title", artist, @"artist", album, @"album", nil];
+        if (![track isEqualToDictionary:pendingGrowlTrack]) {
+            [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendPendingGrowlNotification) object:nil];
+            [pendingGrowlTrack release];
+            pendingGrowlTrack = nil;
+            if (![track isEqualToDictionary:lastGrowlTrack]) {
+                pendingGrowlTrack = [track copy];
+                [self performSelector:@selector(sendPendingGrowlNotification) withObject:nil afterDelay:1.5];
+            }
+        }
+    }
 
     [volumeSlider setFloatValue:[receiver volumeValue]];
     [titleText setStringValue:title];
@@ -484,6 +500,22 @@
                         waitUntilDone:NO];
 }
 
+- (void)sendPendingGrowlNotification {
+    if (pendingGrowlTrack == nil) {
+        return;
+    }
+    NSData *artwork = [receiver coverArtData];
+    NSImage *image = artwork == nil ? nil : [[NSImage alloc] initWithData:artwork];
+    [growlNotifier notifyTrackTitle:[pendingGrowlTrack objectForKey:@"title"]
+                            artist:[pendingGrowlTrack objectForKey:@"artist"]
+                             album:[pendingGrowlTrack objectForKey:@"album"]
+                             image:image];
+    [image release];
+    [lastGrowlTrack release];
+    lastGrowlTrack = pendingGrowlTrack;
+    pendingGrowlTrack = nil;
+}
+
 - (IBAction)showMainWindow:(id)sender {
     (void)sender;
     [NSApp activateIgnoringOtherApps:YES];
@@ -543,8 +575,10 @@
                                                                                                         name:PowerPlayPlaybackProgressDidChangeNotification
                                                                                                     object:receiver];
     [receiver stopReceiver];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendPendingGrowlNotification) object:nil];
     [growlNotifier release];
-    [lastGrowlTitle release];
+    [lastGrowlTrack release];
+    [pendingGrowlTrack release];
     [receiver release];
 }
 

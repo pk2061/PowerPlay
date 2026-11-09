@@ -2082,6 +2082,17 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSNumber *newTrackDuration = [parsedMetadata objectForKey:@"duration"];
 
     @synchronized(self) {
+        BOOL sameTitleChangedTrack = [newTitle isKindOfClass:[NSString class]] &&
+            [newTitle length] > 0 && [newTitle isEqualToString:trackName] &&
+            (([newArtist isKindOfClass:[NSString class]] && [newArtist length] > 0 &&
+              [artistName length] > 0 && ![newArtist isEqualToString:artistName]) ||
+             ([newAlbum isKindOfClass:[NSString class]] && [newAlbum length] > 0 &&
+              [albumName length] > 0 && ![newAlbum isEqualToString:albumName]));
+        if (sameTitleChangedTrack) {
+            [coverArtData release];
+            coverArtData = nil;
+            changed = YES;
+        }
         if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
             ![newTitle isEqualToString:currentTitle]) {
             [trackName release];
@@ -2090,6 +2101,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             currentTitle = [newTitle copy];
             changed = YES;
             titleChanged = YES;
+            [coverArtData release];
+            coverArtData = nil;
             elapsedPlaybackTime = 0.0;
             trackDuration = 0.0;
             progressResumeOffset = 0.0;
@@ -2111,6 +2124,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             ![newArtist isEqualToString:artistName]) {
             [artistName release];
             artistName = [newArtist copy];
+            changed = YES;
+        }
+        if (titleChanged && (![newArtist isKindOfClass:[NSString class]] || [newArtist length] == 0) &&
+            artistName != nil) {
+            [artistName release];
+            artistName = nil;
             changed = YES;
         }
         if ([newAlbum isKindOfClass:[NSString class]] && [newAlbum length] > 0 &&

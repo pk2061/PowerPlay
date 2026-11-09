@@ -73,7 +73,7 @@ flowchart TD
 - Incoming RTSP connection handling, including Apple-Challenge responses
 - RTSP session handling, RTP audio reception, AES decryption, Apple Lossless decoding through AudioConverter, and CoreAudio output
 - Track metadata, artwork, sender volume, and experimental progress display
-- Optional Growl notifications on track changes
+- Growl notifications on track changes, with artwork when available and the application icon as a fallback
 - Project structure aligned with a classic Xcode Tiger workflow
 
 ## Build and validation
@@ -89,6 +89,17 @@ A lightweight host syntax check is available at [Project/build.sh](Project/build
 Run the command from the repository root on a Mac with the required development tools and frameworks. It checks Objective-C syntax with the host SDK; it does not produce an app or verify Tiger SDK, linking, or runtime compatibility.
 
 The project-wide host syntax check has passed with modern SDK deprecation warnings. Both Xcode project files have previously passed `plutil -lint`. A Tiger build and iPhone test are still needed after changes, particularly for timing edge cases.
+
+Growl notifications use the legacy distributed notification protocol and do not require linking Growl.framework. Install and run a Tiger-compatible version of Growl to display them. The host-side notification payload test can be run with:
+
+```bash
+clang -fno-objc-arc -IApp -framework Cocoa Tests/GrowlNotifierTests.m App/GrowlNotifier.m -o /tmp/powerplay-growl-notifier-tests
+/tmp/powerplay-growl-notifier-tests
+clang -fno-objc-arc -Wno-incomplete-implementation -IApp -IAudio -INetwork -IMetadata -IUI -framework Cocoa Tests/GrowlTrackFlowTests.m App/AirPlayReceiverAppDelegate.m UI/CoverArtView.m -o /tmp/powerplay-growl-track-flow-tests
+/tmp/powerplay-growl-track-flow-tests
+```
+
+Actual notification delivery, artwork, and Growl preferences still require validation on Tiger with Growl running.
 
 ## Shairport Sync Reference
 

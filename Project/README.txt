@@ -17,7 +17,7 @@ Required build configuration:
 - Architecture: PowerPC + i386
 - Languages: Objective-C/Cocoa
 - Frameworks: Cocoa, CoreAudio, AudioToolbox
-- Optional: Growl framework when AIRPLAY_GROWL_AVAILABLE is enabled
+- Optional at runtime: Growl for track notifications (no Growl framework required)
 
 Core source files by area:
 - App/AirPlayReceiverAppDelegate.m / .h

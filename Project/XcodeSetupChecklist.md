@@ -45,7 +45,6 @@ flowchart TD
 - Cocoa
 - CoreAudio
 - AudioToolbox
-- Optional: Growl
 
 ### 4. Add source files
 - App/
@@ -74,9 +73,9 @@ flowchart TD
 - Check for deprecated API warnings if building against a modern SDK.
 
 ### 7. Optional Growl configuration
-- Add the Growl framework to the target.
-- Define `AIRPLAY_GROWL_AVAILABLE=1` when building with notifications enabled.
-- Keep the code guarded so the app still builds without Growl installed.
+- Install and run a Tiger-compatible Growl version to display notifications.
+- PowerPlay registers through distributed notifications; no Growl framework or build flag is required.
+- Test track changes with and without artwork and check Growl's notification preferences.
 
 ### 8. Build and sanity checks
 - Compile with syntax validation first.
