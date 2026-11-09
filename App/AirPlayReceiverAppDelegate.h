@@ -33,6 +33,7 @@
 - (void)refreshUI;
 - (void)refreshPlaybackProgress:(NSTimer *)timer;
 
+- (IBAction)showMainWindow:(id)sender;
 - (IBAction)togglePlayPause:(id)sender;
 - (IBAction)nextTrack:(id)sender;
 - (IBAction)previousTrack:(id)sender;

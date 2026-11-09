@@ -224,6 +224,12 @@
     [aboutItem setTarget:NSApp];
     [applicationMenu addItem:[NSMenuItem separatorItem]];
 
+        NSMenuItem *showWindowItem = [applicationMenu addItemWithTitle:@"Show PowerPlay Window"
+                                       action:@selector(showMainWindow:)
+                                   keyEquivalent:@""];
+        [showWindowItem setTarget:self];
+        [applicationMenu addItem:[NSMenuItem separatorItem]];
+
     NSMenuItem *hideItem = [applicationMenu addItemWithTitle:@"Hide PowerPlay"
                                                       action:@selector(hide:)
                                                keyEquivalent:@"h"];
@@ -261,6 +267,7 @@
                                          styleMask:(NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask)
                                            backing:NSBackingStoreBuffered
                                              defer:NO];
+        [window setReleasedWhenClosed:NO];
     [window setTitle:@"PowerPlay"];
     [window center];
 
@@ -475,6 +482,22 @@
     [self performSelectorOnMainThread:@selector(refreshUI)
                            withObject:nil
                         waitUntilDone:NO];
+}
+
+- (IBAction)showMainWindow:(id)sender {
+    (void)sender;
+    [NSApp activateIgnoringOtherApps:YES];
+    if ([window isMiniaturized]) {
+        [window deminiaturize:nil];
+    }
+    [window makeKeyAndOrderFront:nil];
+}
+
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)application hasVisibleWindows:(BOOL)hasVisibleWindows {
+    (void)application;
+    (void)hasVisibleWindows;
+    [self showMainWindow:nil];
+    return YES;
 }
 
 - (IBAction)togglePlayPause:(id)sender {
