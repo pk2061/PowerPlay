@@ -6,9 +6,9 @@
 [![Language](https://img.shields.io/badge/language-Objective%E2%80%93C-6E4C13)](https://github.com/pk2061/PowerPlay)
 [![Status](https://img.shields.io/badge/status-Experimental-orange)](https://github.com/pk2061/PowerPlay)
 
-PowerPlay is an experimental classic RAOP/AirPlay receiver prototype for Mac OS X 10.4 Tiger, written in non-ARC Objective-C. It publishes a Bonjour `_raop._tcp` service, accepts incoming RTSP connections, answers Apple-Challenge requests, and has early session and audio-processing scaffolding. Complete streaming from a real sender has not yet been verified.
+PowerPlay is an experimental classic RAOP/AirPlay audio receiver for Mac OS X 10.4 Tiger, written in non-ARC Objective-C. It advertises via Bonjour, receives audio from an AirPlay sender, and plays it through CoreAudio. Audible playback from an iPhone has been tested on a Tiger iMac.
 
-This project is intentionally a protocol-oriented foundation and research scaffold rather than a turnkey streaming product. It aims to stay faithful to Tiger-era runtime and ABI constraints while modeling the key protocol boundaries required for real AirPlay compatibility.
+The project remains a prototype rather than a turnkey streaming product. It aims to stay compatible with Tiger-era runtimes and toolchains while implementing the classic RAOP protocol.
 
 ## Why this project exists
 
@@ -18,28 +18,26 @@ This project is intentionally a protocol-oriented foundation and research scaffo
 
 ## Current status
 
-PowerPlay is in an experimental, partially implemented state.
+PowerPlay is experimental and has been tested with an iPhone and a Tiger iMac. Other senders, system configurations, and long-running use need further testing.
 
 ### Verified
-- The app launches and displays its main window on the target iMac.
-- The iMac publishes `000393656C4E@PowerPlay` as `_raop._tcp`; the service has also been visible in a MacBook `dns-sd -B` scan.
-- The iMac accepts incoming RTSP TCP connections and has answered `OPTIONS` with `200 OK` and a matching `CSeq`.
-- The Apple-Challenge response was exercised locally with the iPhone-style sample challenge. Its RSA signature was independently verified against the challenge, local IPv4 address, and advertised device ID.
-- The local Objective-C syntax check and Xcode project-file lint pass. A Tiger/Xcode 2.5 build is not available in the development environment.
+- The app launches on the target iMac and publishes a Bonjour `_raop._tcp` service.
+- An iPhone has connected through RTSP negotiation and streamed audible audio on Tiger. A longer run decoded more than 8,000 RTP packets before teardown.
+- The audio path has exercised Apple-Challenge, AES key negotiation, RTP reception and decryption, NTP timing exchange, Apple Lossless decoding, and CoreAudio output.
+- Disconnecting the iPhone returns the app to its waiting state. The user reports that playback timing across pause and resume has improved, though it still needs further validation.
+- Long track, artist, and album labels scroll successfully on Tiger.
 
-### Implemented but not yet verified with a real sender
-- Basic RTSP handling for `OPTIONS`, `ANNOUNCE`, `SETUP`, `RECORD`, `PAUSE`, and `TEARDOWN`.
-- UDP port binding and response transport fields during `SETUP`.
-- Metadata parsing, ALAC-related code, and CoreAudio output scaffolding.
+### Implemented
+- Classic RAOP RTSP session handling and UDP audio, control, and timing sockets.
+- Track title, artist, album, and cover-art display; optional Growl notifications; and sender volume mapping.
+- Playback progress with elapsed, total, and remaining time, including RTP-silence-based pause detection when the sender does not send `PAUSE`.
+- Horizontally scrolling track, artist, and album labels when text overflows.
 
-### Not complete
-- A successful real-iPhone negotiation through `ANNOUNCE`, `SETUP`, and `RECORD` after the Apple-Challenge response was added.
-- Sustained RTP audio reception, sender-compatible ALAC decoding, synchronization, or audible end-to-end playback.
-- Reliable handling of timing/control UDP traffic and complete RTSP/authentication edge cases.
-
-The current RTP read path receives at most one packet per read call, and the ALAC decoder is not yet a sender-compatible production decoder. Bonjour visibility and a successful `OPTIONS` exchange therefore do not demonstrate audio playback.
-
-The code is designed as a realistic foundation for further implementation rather than a final consumer-ready application.
+### Limitations
+- Playback timing is an estimate based on sender progress and audio activity. Duration may be unavailable, and a prolonged network interruption can be mistaken for a pause.
+- Sender names depend on an advertised client name or a resolvable hostname; otherwise the UI uses a generic name.
+- Playback controls and protocol edge cases, synchronization, and compatibility across senders require further testing. AirPlay 2 support is not claimed.
+- Tiger/Xcode 2.5 builds and runtime behavior must be checked on the target machine; modern host syntax checks cannot establish Tiger compatibility.
 
 ## Project layout
 
@@ -53,7 +51,7 @@ The code is designed as a realistic foundation for further implementation rather
 
 ## Architectural flow
 
-The diagram below shows the intended end-to-end pipeline; several transport and decoder stages remain incomplete.
+The diagram below shows the receiver's audio and metadata paths.
 
 ```mermaid
 flowchart TD
@@ -70,31 +68,33 @@ flowchart TD
 
 ## Features
 
-- Legacy Cocoa app skeleton for Tiger
+- Cocoa app targeting Tiger
 - Bonjour `_raop._tcp` service publication
 - Incoming RTSP connection handling, including Apple-Challenge responses
-- Initial RTSP session and UDP transport setup
-- RTP validation, ALAC decoder boundary, and CoreAudio output scaffolding
-- Metadata parsing for title, artist, album, and artwork
-- Growl notifications on track changes
+- RTSP session handling, RTP audio reception, AES decryption, Apple Lossless decoding through AudioConverter, and CoreAudio output
+- Track metadata, artwork, sender volume, and experimental progress display
+- Optional Growl notifications on track changes
 - Project structure aligned with a classic Xcode Tiger workflow
 
 ## Build and validation
 
-This project is set up with a Tiger-oriented syntax validation flow. A lightweight build helper is available at [Project/build.sh](Project/build.sh).
+For a target build, open [PowerPlayApp.xcodeproj](PowerPlayApp.xcodeproj) on the Tiger machine with Xcode 2.5 and build the PowerPlay target. Test the resulting app with an AirPlay sender on the same network.
+
+A lightweight host syntax check is available at [Project/build.sh](Project/build.sh):
 
 ```bash
-cd /Users/jan/airplay_tiger_receiver
 ./Project/build.sh
 ```
 
-The script is intended for local syntax validation and compatibility checks in a legacy Objective-C/Cocoa build environment.
+Run the command from the repository root on a Mac with the required development tools and frameworks. It checks Objective-C syntax with the host SDK; it does not produce an app or verify Tiger SDK, linking, or runtime compatibility.
 
-The latest local checks include the project-wide Objective-C syntax check and `plutil -lint` for both Xcode projects. A local RTSP test exercised `OPTIONS`, `ANNOUNCE`, `SETUP`, `RECORD`, and `TEARDOWN`; this is a protocol smoke test, not proof of interoperability. The Apple-Challenge signature was independently verified locally. The actual Tiger/Xcode 2.5 build and the next iPhone-on-Tiger challenge test are still required.
+The project-wide host syntax check has passed with modern SDK deprecation warnings. Both Xcode project files have previously passed `plutil -lint`. A Tiger build and iPhone test are still needed after changes, particularly for timing edge cases.
 
 ## Shairport Sync Reference
 
-The classic RAOP Apple-Challenge behavior was implemented in PowerPlay using the reference flow in [rtsp.c](https://github.com/mikebrady/shairport-sync/blob/master/rtsp.c): decode the challenge, append the receiver's local address and six-byte device ID, apply raw RSA PKCS#1 v1.5 signing, and return the unpadded Base64 signature as `Apple-Response`. PowerPlay's handler was written for this project; no Shairport Sync RTSP source function was copied verbatim. The shared classic RAOP RSA key bundled at [Project/RAOPPrivateKey.pem](Project/RAOPPrivateKey.pem) is sourced from [common.c](https://github.com/mikebrady/shairport-sync/blob/master/common.c) in [Shairport Sync](https://github.com/mikebrady/shairport-sync). Its MIT license and attribution are recorded in [Project/THIRD_PARTY_NOTICES.md](Project/THIRD_PARTY_NOTICES.md).
+[Shairport Sync](https://github.com/mikebrady/shairport-sync) is a reference for classic RAOP protocol behavior. Its [rtsp.c](https://github.com/mikebrady/shairport-sync/blob/master/rtsp.c) informed PowerPlay's Apple-Challenge response, `X-Apple-Client-Name` handling, and interpretation of `progress` RTP timestamps. PowerPlay's RTSP handler was written for this project; no Shairport Sync RTSP source function was copied verbatim.
+
+PowerPlay's Apple-Challenge response signs the challenge together with the local address and six-byte device identifier using RSA PKCS#1 v1.5, then returns the unpadded Base64 signature. The bundled classic RAOP private key in [Project/RAOPPrivateKey.pem](Project/RAOPPrivateKey.pem) comes from Shairport Sync's [common.c](https://github.com/mikebrady/shairport-sync/blob/master/common.c). Attribution and the MIT license are recorded in [Project/THIRD_PARTY_NOTICES.md](Project/THIRD_PARTY_NOTICES.md).
 
 ## GitHub release checklist
 
@@ -102,4 +102,4 @@ See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for the release checklist used 
 
 ## Notes
 
-This repository is a practical starting point for a Tiger-era AirPlay receiver, not a complete drop-in implementation. It is best viewed as a protocol-first engineering prototype; real iPhone session negotiation and audio playback remain open validation milestones.
+PowerPlay is a working prototype, not a complete drop-in AirPlay implementation. See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for outstanding release validation.

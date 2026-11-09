@@ -17,6 +17,9 @@ Use this checklist before creating a tagged release or publishing a more complet
 - [ ] Verify RTP packet handling and ALAC decode boundaries are still aligned with the sender model.
 - [ ] Verify CoreAudio playback still receives PCM output in a stable path.
 - [ ] Verify cover-art and metadata parsing are still extracted correctly from packets.
+- [ ] Verify long track, artist, and album labels scroll without wrapping on Tiger.
+- [ ] Test pause, resume, track changes, and duration/progress display with a real sender; check behavior when duration is unavailable.
+- [ ] Test playback controls, sender volume changes, and disconnect/reconnect behavior with a real sender.
 - [ ] Verify the Growl notifier shows track metadata and cover art when available.
 
 ## Legacy compatibility
@@ -43,4 +46,4 @@ Use this checklist before creating a tagged release or publishing a more complet
 
 ## Suggested next release criteria
 
-A release is ready when all high-risk items above are green and the app can complete at least one realistic sender handshake with no protocol regressions.
+A release is ready when the high-risk checks above pass on Tiger and a real sender can connect, play audio, pause, resume, and disconnect without regressions.
