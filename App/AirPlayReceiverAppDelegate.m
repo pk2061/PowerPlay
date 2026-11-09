@@ -1,6 +1,178 @@
 #import "AirPlayReceiverAppDelegate.h"
 #import "CoverArtView.h"
 
+@class PowerPlayScrollingTextField;
+
+@interface PowerPlayScrollTimerTarget : NSObject {
+    PowerPlayScrollingTextField *field;
+}
+- (id)initWithField:(PowerPlayScrollingTextField *)textField;
+- (void)setField:(PowerPlayScrollingTextField *)textField;
+- (void)scrollTimerFired:(NSTimer *)timer;
+@end
+
+@interface PowerPlayScrollingTextField : NSTextField {
+    NSTimer *scrollTimer;
+    PowerPlayScrollTimerTarget *scrollTimerTarget;
+    CGFloat scrollTextWidth;
+    CGFloat scrollOffset;
+    NSInteger scrollDirection;
+    NSUInteger scrollPauseTicks;
+}
+- (void)updateScrollTimer;
+- (void)advanceScroll:(NSTimer *)timer;
+@end
+
+@implementation PowerPlayScrollTimerTarget
+
+- (id)initWithField:(PowerPlayScrollingTextField *)textField {
+    self = [super init];
+    if (self != nil) {
+        field = textField;
+    }
+    return self;
+}
+
+- (void)setField:(PowerPlayScrollingTextField *)textField {
+    field = textField;
+}
+
+- (void)scrollTimerFired:(NSTimer *)timer {
+    [field advanceScroll:timer];
+}
+
+@end
+
+@implementation PowerPlayScrollingTextField
+
+- (id)initWithFrame:(NSRect)frameRect {
+    self = [super initWithFrame:frameRect];
+    if (self != nil) {
+        scrollTimer = nil;
+        scrollTextWidth = 0.0;
+        scrollOffset = 0.0;
+        scrollDirection = 1;
+        scrollPauseTicks = 20;
+        if (scrollTimerTarget == nil) {
+            scrollTimerTarget = [[PowerPlayScrollTimerTarget alloc] initWithField:self];
+        }
+        [self updateScrollTimer];
+    }
+    return self;
+}
+
+- (void)dealloc {
+    [scrollTimer invalidate];
+    [scrollTimer release];
+    [scrollTimerTarget setField:nil];
+    [scrollTimerTarget release];
+    [super dealloc];
+}
+
+- (void)setStringValue:(NSString *)value {
+    NSString *oldValue = [self stringValue];
+    [super setStringValue:value];
+    if (![oldValue isEqualToString:value]) {
+        scrollOffset = 0.0;
+        scrollDirection = 1;
+        scrollPauseTicks = 20;
+        [self updateScrollTimer];
+        [self setNeedsDisplay:YES];
+    }
+}
+
+- (void)setFrameSize:(NSSize)newSize {
+    [super setFrameSize:newSize];
+    [self updateScrollTimer];
+}
+
+- (void)setFont:(NSFont *)font {
+    [super setFont:font];
+    [self updateScrollTimer];
+}
+
+- (NSDictionary *)scrollTextAttributes {
+    NSMutableDictionary *attributes = [NSMutableDictionary dictionary];
+    NSFont *font = [self font];
+    NSColor *color = [self textColor];
+    [attributes setObject:font == nil ? [NSFont systemFontOfSize:12.0] : font
+                   forKey:NSFontAttributeName];
+    [attributes setObject:color == nil ? [NSColor blackColor] : color
+                   forKey:NSForegroundColorAttributeName];
+    return attributes;
+}
+
+- (void)updateScrollTimer {
+    NSString *value = [self stringValue];
+    if (value == nil || [value length] == 0) {
+        scrollTextWidth = 0.0;
+    } else {
+        scrollTextWidth = [value sizeWithAttributes:[self scrollTextAttributes]].width;
+    }
+
+    CGFloat maximumOffset = scrollTextWidth - NSWidth([self bounds]);
+    if (maximumOffset <= 0.0) {
+        scrollOffset = 0.0;
+        [scrollTimer invalidate];
+        [scrollTimer release];
+        scrollTimer = nil;
+        return;
+    }
+
+    if (scrollTimer == nil) {
+        if (scrollTimerTarget == nil) {
+            scrollTimerTarget = [[PowerPlayScrollTimerTarget alloc] initWithField:self];
+        }
+        scrollTimer = [[NSTimer scheduledTimerWithTimeInterval:0.04
+                                                        target:scrollTimerTarget
+                                                      selector:@selector(scrollTimerFired:)
+                                                      userInfo:nil
+                                                       repeats:YES] retain];
+    }
+}
+
+- (void)advanceScroll:(NSTimer *)timer {
+    (void)timer;
+    if (scrollPauseTicks > 0) {
+        scrollPauseTicks--;
+        return;
+    }
+
+    CGFloat maximumOffset = scrollTextWidth - NSWidth([self bounds]);
+    scrollOffset += (CGFloat)scrollDirection;
+    if (scrollOffset >= maximumOffset) {
+        scrollOffset = maximumOffset;
+        scrollDirection = -1;
+        scrollPauseTicks = 20;
+    } else if (scrollOffset <= 0.0) {
+        scrollOffset = 0.0;
+        scrollDirection = 1;
+        scrollPauseTicks = 20;
+    }
+    [self setNeedsDisplay:YES];
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+    NSString *value = [self stringValue];
+    if (value == nil || scrollTextWidth <= NSWidth([self bounds])) {
+        [super drawRect:dirtyRect];
+        return;
+    }
+
+    NSDictionary *attributes = [self scrollTextAttributes];
+    NSSize textSize = [value sizeWithAttributes:attributes];
+    NSRect bounds = [self bounds];
+    NSPoint textPoint = NSMakePoint(NSMinX(bounds) - scrollOffset,
+        NSMinY(bounds) + (NSHeight(bounds) - textSize.height) / 2.0);
+
+    [NSGraphicsContext saveGraphicsState];
+    NSRectClip(bounds);
+    [value drawAtPoint:textPoint withAttributes:attributes];
+    [NSGraphicsContext restoreGraphicsState];
+}
+
+@end
+
 @interface PowerPlayClickableTextField : NSTextField
 @end
 
@@ -97,7 +269,7 @@
     coverView = [[CoverArtView alloc] initWithFrame:NSMakeRect(20, 90, 180, 180)];
     [content addSubview:coverView];
 
-    titleText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 220, 300, 28)];
+    titleText = [[PowerPlayScrollingTextField alloc] initWithFrame:NSMakeRect(220, 220, 300, 28)];
     [titleText setEditable:NO];
     [titleText setBordered:NO];
     [titleText setDrawsBackground:NO];
@@ -106,7 +278,7 @@
     [titleText setStringValue:@"No source connected"];
     [content addSubview:titleText];
 
-    artistText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 190, 300, 24)];
+    artistText = [[PowerPlayScrollingTextField alloc] initWithFrame:NSMakeRect(220, 190, 300, 24)];
     [artistText setEditable:NO];
     [artistText setBordered:NO];
     [artistText setDrawsBackground:NO];
@@ -115,7 +287,7 @@
     [artistText setStringValue:@"AirPlay Source"];
     [content addSubview:artistText];
 
-    albumText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 165, 300, 22)];
+    albumText = [[PowerPlayScrollingTextField alloc] initWithFrame:NSMakeRect(220, 165, 300, 22)];
     [albumText setEditable:NO];
     [albumText setBordered:NO];
     [albumText setDrawsBackground:NO];
