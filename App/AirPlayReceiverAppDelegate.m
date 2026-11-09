@@ -14,8 +14,8 @@
 @interface PowerPlayScrollingTextField : NSTextField {
     NSTimer *scrollTimer;
     PowerPlayScrollTimerTarget *scrollTimerTarget;
-    CGFloat scrollTextWidth;
-    CGFloat scrollOffset;
+    float scrollTextWidth;
+    float scrollOffset;
     NSInteger scrollDirection;
     NSUInteger scrollPauseTicks;
 }
@@ -110,7 +110,7 @@
         scrollTextWidth = [value sizeWithAttributes:[self scrollTextAttributes]].width;
     }
 
-    CGFloat maximumOffset = scrollTextWidth - NSWidth([self bounds]);
+    float maximumOffset = scrollTextWidth - NSWidth([self bounds]);
     if (maximumOffset <= 0.0) {
         scrollOffset = 0.0;
         [scrollTimer invalidate];
@@ -138,8 +138,8 @@
         return;
     }
 
-    CGFloat maximumOffset = scrollTextWidth - NSWidth([self bounds]);
-    scrollOffset += (CGFloat)scrollDirection;
+    float maximumOffset = scrollTextWidth - NSWidth([self bounds]);
+    scrollOffset += (float)scrollDirection;
     if (scrollOffset >= maximumOffset) {
         scrollOffset = maximumOffset;
         scrollDirection = -1;
