@@ -14,34 +14,34 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
         return images[buttonType];
     }
 
-    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(20, 20)];
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(22, 22)];
     [image lockFocus];
     [[NSColor darkGrayColor] set];
 
     NSBezierPath *triangle = [NSBezierPath bezierPath];
     if (buttonType == PowerPlayPlayButton) {
-        [triangle moveToPoint:NSMakePoint(6, 3)];
-        [triangle lineToPoint:NSMakePoint(6, 17)];
-        [triangle lineToPoint:NSMakePoint(17, 10)];
+        [triangle moveToPoint:NSMakePoint(7, 3)];
+        [triangle lineToPoint:NSMakePoint(7, 19)];
+        [triangle lineToPoint:NSMakePoint(19, 11)];
         [triangle closePath];
         [triangle fill];
     } else if (buttonType == PowerPlayPreviousButton) {
-        NSRectFill(NSMakeRect(3, 4, 2, 12));
-        [triangle moveToPoint:NSMakePoint(15, 3)];
-        [triangle lineToPoint:NSMakePoint(15, 17)];
-        [triangle lineToPoint:NSMakePoint(6, 10)];
+        NSRectFill(NSMakeRect(4, 5, 2, 12));
+        [triangle moveToPoint:NSMakePoint(16, 3)];
+        [triangle lineToPoint:NSMakePoint(16, 19)];
+        [triangle lineToPoint:NSMakePoint(6, 11)];
         [triangle closePath];
         [triangle fill];
     } else if (buttonType == PowerPlayNextButton) {
-        [triangle moveToPoint:NSMakePoint(5, 3)];
-        [triangle lineToPoint:NSMakePoint(5, 17)];
-        [triangle lineToPoint:NSMakePoint(14, 10)];
+        [triangle moveToPoint:NSMakePoint(6, 3)];
+        [triangle lineToPoint:NSMakePoint(6, 19)];
+        [triangle lineToPoint:NSMakePoint(16, 11)];
         [triangle closePath];
         [triangle fill];
-        NSRectFill(NSMakeRect(15, 4, 2, 12));
+        NSRectFill(NSMakeRect(17, 5, 2, 12));
     } else {
-        NSRectFill(NSMakeRect(5, 4, 4, 12));
-        NSRectFill(NSMakeRect(12, 4, 4, 12));
+        NSRectFill(NSMakeRect(6, 5, 4, 12));
+        NSRectFill(NSMakeRect(13, 5, 4, 12));
     }
 
     [image unlockFocus];
@@ -393,11 +393,11 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [elapsedTimeText setBordered:NO];
     [elapsedTimeText setDrawsBackground:NO];
     [elapsedTimeText setFont:[NSFont systemFontOfSize:10]];
-    [elapsedTimeText setTextColor:[NSColor grayColor]];
+    [elapsedTimeText setTextColor:[NSColor blackColor]];
     [elapsedTimeText setStringValue:@"0:00"];
     [content addSubview:elapsedTimeText];
 
-    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 141, 150, 14)];
+    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 141, 200, 14)];
     [playbackProgress setStyle:NSProgressIndicatorBarStyle];
     [playbackProgress setIndeterminate:NO];
     [playbackProgress setMinValue:0.0];
@@ -405,12 +405,12 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playbackProgress setDoubleValue:0.0];
     [content addSubview:playbackProgress];
 
-    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(428, 139, 122, 18)];
+    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(480, 139, 70, 18)];
     [playbackTimeText setEditable:NO];
     [playbackTimeText setBordered:NO];
     [playbackTimeText setDrawsBackground:NO];
     [playbackTimeText setFont:[NSFont systemFontOfSize:10]];
-    [playbackTimeText setTextColor:[NSColor grayColor]];
+    [playbackTimeText setTextColor:[NSColor blackColor]];
     [playbackTimeText setAlignment:NSRightTextAlignment];
     [[playbackTimeText cell] setWraps:NO];
     [[playbackTimeText cell] setScrollable:YES];
@@ -429,10 +429,10 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [content addSubview:statusText];
 
     PowerPlaySpeakerIconView *speakerIcon = [[PowerPlaySpeakerIconView alloc]
-        initWithFrame:NSMakeRect(198, 114, 16, 16)];
+        initWithFrame:NSMakeRect(220, 114, 16, 16)];
     [content addSubview:speakerIcon];
 
-    volumeSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(220, 110, 180, 24)];
+    volumeSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(242, 110, 180, 24)];
     [volumeSlider setMinValue:0.0];
     [volumeSlider setMaxValue:1.0];
     [volumeSlider setFloatValue:0.5];
@@ -440,7 +440,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [volumeSlider setAction:@selector(changeVolume:)];
     [content addSubview:volumeSlider];
 
-    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 64, 40, 40)];
+    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(287, 61, 46, 46)];
     [prevButton setBezelStyle:NSCircularBezelStyle];
     [prevButton setImage:PowerPlayTransportButtonImage(PowerPlayPreviousButton)];
     [prevButton setImagePosition:NSImageOnly];
@@ -449,7 +449,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [prevButton setAction:@selector(previousTrack:)];
     [content addSubview:prevButton];
 
-    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(350, 64, 40, 40)];
+    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(347, 61, 46, 46)];
     [playPauseButton setBezelStyle:NSCircularBezelStyle];
     [playPauseButton setImage:PowerPlayTransportButtonImage(PowerPlayPlayButton)];
     [playPauseButton setImagePosition:NSImageOnly];
@@ -458,7 +458,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playPauseButton setAction:@selector(togglePlayPause:)];
     [content addSubview:playPauseButton];
 
-    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(410, 64, 40, 40)];
+    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 61, 46, 46)];
     [nextButton setBezelStyle:NSCircularBezelStyle];
     [nextButton setImage:PowerPlayTransportButtonImage(PowerPlayNextButton)];
     [nextButton setImagePosition:NSImageOnly];
