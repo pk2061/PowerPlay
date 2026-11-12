@@ -1704,7 +1704,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 lastAudioPacketTime = packetTimeSeconds;
             }
             loggedAudioSilence = NO;
-            NSData *packet = [NSData dataWithBytes:packetBuffer length:(NSUInteger)received];
+            NSData *packet = [NSData dataWithBytes:(void *)packetBuffer
+                                             length:(NSUInteger)received];
             NSRange payloadRange;
             BOOL validRTPHeader = [self validateRTPPacket:packet];
             BOOL validPayloadLayout = validRTPHeader && PowerPlayRTPPayloadRange(packet, &payloadRange);
