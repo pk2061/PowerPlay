@@ -2128,14 +2128,17 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
         if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
             ![newTitle isEqualToString:currentTitle]) {
+            BOOL replacingExistingTrack = [trackName length] > 0;
             [trackName release];
             trackName = [newTitle copy];
             [currentTitle release];
             currentTitle = [newTitle copy];
             changed = YES;
             titleChanged = YES;
-            [coverArtData release];
-            coverArtData = nil;
+            if (replacingExistingTrack) {
+                [coverArtData release];
+                coverArtData = nil;
+            }
             elapsedPlaybackTime = 0.0;
             trackDuration = 0.0;
             progressResumeOffset = 0.0;
