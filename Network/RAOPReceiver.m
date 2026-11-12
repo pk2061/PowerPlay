@@ -653,6 +653,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (void)startDACPServiceDiscovery;
 - (void)stopDACPServiceDiscovery;
 - (void)sendDACPCommandOnThread:(NSDictionary *)request;
+- (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
 - (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData;
 @end
 
@@ -759,9 +760,23 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         return;
     }
 
-    NSDictionary *request = [NSDictionary dictionaryWithObjectsAndKeys:
+    NSMutableDictionary *request = [NSMutableDictionary dictionaryWithObjectsAndKeys:
         command, @"command", address, @"address", addressData, @"addressData", activeRemote, @"activeRemote",
         [NSNumber numberWithLong:(long)port], @"port", nil];
+    if ([command isEqualToString:@"playpause"]) {
+        @synchronized(self) {
+            if (dacpTogglePending) {
+                [address release];
+                [addressData release];
+                [activeRemote release];
+                return;
+            }
+            dacpTogglePending = YES;
+            dacpToggleGeneration++;
+            [request setObject:[NSNumber numberWithBool:![self isPlaying]] forKey:@"targetPlaying"];
+            [request setObject:[NSNumber numberWithUnsignedLong:dacpToggleGeneration] forKey:@"toggleGeneration"];
+        }
+    }
     [NSThread detachNewThreadSelector:@selector(sendDACPCommandOnThread:)
                              toTarget:self withObject:request];
     [address release];
@@ -779,6 +794,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     const struct sockaddr *remoteAddress = (const struct sockaddr *)[socketAddressData bytes];
     if (remoteAddress == NULL || [socketAddressData length] < sizeof(struct sockaddr)) {
         NSLog(@"RAOP: DACP %@ has an invalid resolved socket address", command);
+        [self finishDACPPlaybackCommand:request succeeded:NO];
         [threadPool drain];
         return;
     }
@@ -786,6 +802,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     int socketHandle = socket(remoteAddress->sa_family, SOCK_STREAM, 0);
     if (socketHandle < 0) {
         NSLog(@"RAOP: DACP %@ socket creation failed (%d)", command, errno);
+        [self finishDACPPlaybackCommand:request succeeded:NO];
         [threadPool drain];
         return;
     }
@@ -799,6 +816,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     if (connect(socketHandle, remoteAddress, (socklen_t)[socketAddressData length]) != 0) {
         NSLog(@"RAOP: DACP %@ connection to %@:%ld failed (%d)", command, host, (long)port, errno);
         close(socketHandle);
+        [self finishDACPPlaybackCommand:request succeeded:NO];
         [threadPool drain];
         return;
     }
@@ -824,15 +842,25 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         remaining -= (NSUInteger)sent;
     }
 
+    BOOL succeeded = NO;
     if (remaining == 0) {
         char response[1024];
-        ssize_t received = recv(socketHandle, response, sizeof(response) - 1, 0);
-        if (received > 0) {
-            response[received] = '\0';
-            char *lineEnd = strstr(response, "\r\n");
-            if (lineEnd != NULL) {
-                *lineEnd = '\0';
-            }
+        size_t responseLength = 0;
+        ssize_t received = 0;
+        response[0] = '\0';
+        while (responseLength < sizeof(response) - 1 && strstr(response, "\r\n") == NULL) {
+            received = recv(socketHandle, response + responseLength, sizeof(response) - 1 - responseLength, 0);
+            if (received < 0 && errno == EINTR) continue;
+            if (received <= 0) break;
+            responseLength += (size_t)received;
+            response[responseLength] = '\0';
+        }
+        char *lineEnd = strstr(response, "\r\n");
+        if (lineEnd != NULL) {
+            *lineEnd = '\0';
+            int statusCode = 0;
+            succeeded = sscanf(response, "HTTP/%*u.%*u %d", &statusCode) == 1 &&
+                        statusCode >= 200 && statusCode < 300;
             NSLog(@"RAOP: DACP %@ response: %s", command, response);
         } else {
             NSLog(@"RAOP: DACP %@ sent; no response received (%d)", command, errno);
@@ -842,7 +870,35 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
 
     close(socketHandle);
+    [self finishDACPPlaybackCommand:request succeeded:succeeded];
     [threadPool drain];
+}
+
+- (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
+    NSNumber *generation = [request objectForKey:@"toggleGeneration"];
+    if (generation == nil) return;
+    BOOL changed = NO;
+    @synchronized(self) {
+        if (dacpTogglePending && [generation unsignedLongValue] == dacpToggleGeneration) {
+            dacpTogglePending = NO;
+            if (succeeded && incomingSessionActive &&
+                [[request objectForKey:@"activeRemote"] isEqualToString:dacpActiveRemote] &&
+                [[request objectForKey:@"addressData"] isEqualToData:dacpAddressData]) {
+                BOOL targetPlaying = [[request objectForKey:@"targetPlaying"] boolValue];
+                elapsedPlaybackTime = [self elapsedPlaybackTimeValue];
+                dacpLocallyPaused = !targetPlaying;
+                progressReferenceTime = targetPlaying && lastAudioPacketTime > 0.0 &&
+                    PowerPlayCurrentTime() - lastAudioPacketTime <= 1.5 ? PowerPlayCurrentTime() : 0.0;
+                if (!targetPlaying) {
+                    progressResumeOffset = elapsedPlaybackTime;
+                    resumeProgressPending = YES;
+                    progressIsRelative = NO;
+                }
+            }
+            changed = YES;
+        }
+    }
+    if (changed) [self notifyMetadataDidChange];
 }
 
 - (id)init {
@@ -864,6 +920,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         currentTitle = [[NSString alloc] initWithString:@"Waiting for AirPlay source..."]; 
         coverArtData = nil;
         isPlaying = NO;
+        dacpLocallyPaused = NO;
+        dacpTogglePending = NO;
+        dacpToggleGeneration = 0;
         volume = 0.5f;
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
@@ -1107,6 +1166,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     @synchronized(self) {
         incomingSessionActive = NO;
         isPlaying = NO;
+        dacpLocallyPaused = NO;
+        dacpTogglePending = NO;
+        dacpToggleGeneration++;
         rtspSessionEstablished = NO;
         rtpSessionReady = NO;
         isSetupComplete = NO;
@@ -1362,6 +1424,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 @synchronized(self) {
                     elapsedPlaybackTime = [self elapsedPlaybackTimeValue];
                     isPlaying = YES;
+                    dacpLocallyPaused = NO;
                     progressReferenceTime = 0.0;
                     lastAudioPacketTime = 0.0;
                 }
@@ -1463,7 +1526,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                         double now = PowerPlayCurrentTime();
                                         BOOL audioRecentlyActive = lastAudioPacketTime == 0.0 ||
                                             now - lastAudioPacketTime <= 1.5;
-                                        BOOL playbackActive = isPlaying && audioRecentlyActive;
+                                        BOOL playbackActive = isPlaying && !dacpLocallyPaused && audioRecentlyActive;
                                         if (playbackActive) {
                                             if (resumeProgressPending) {
                                                 double previousProgressElapsed =
@@ -2944,7 +3007,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     double value;
     @synchronized(self) {
         value = elapsedPlaybackTime;
-        if (isPlaying && lastAudioPacketTime > 0.0 && progressReferenceTime > 0.0) {
+        if (isPlaying && !dacpLocallyPaused && lastAudioPacketTime > 0.0 && progressReferenceTime > 0.0) {
             double currentTime = PowerPlayCurrentTime();
             if (lastAudioPacketTime > 0.0 && currentTime - lastAudioPacketTime > 1.5) {
                 currentTime = lastAudioPacketTime + 1.5;
@@ -2991,10 +3054,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (BOOL)isPlaying {
     BOOL value;
     @synchronized(self) {
-        value = isPlaying && lastAudioPacketTime > 0.0 &&
+        value = isPlaying && !dacpLocallyPaused && lastAudioPacketTime > 0.0 &&
             PowerPlayCurrentTime() - lastAudioPacketTime <= 1.5;
     }
     return value;
+}
+
+- (BOOL)isDACPPlaybackCommandPending {
+    BOOL pending;
+    @synchronized(self) {
+        pending = dacpTogglePending;
+    }
+    return pending;
 }
 
 @end

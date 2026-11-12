@@ -564,7 +564,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 
     BOOL controlsEnabled = [receiver isConnected] && [receiver canControlSender];
     [prevButton setEnabled:controlsEnabled];
-    [playPauseButton setEnabled:controlsEnabled];
+    [playPauseButton setEnabled:controlsEnabled && ![receiver isDACPPlaybackCommandPending]];
     [nextButton setEnabled:controlsEnabled];
 }
 
