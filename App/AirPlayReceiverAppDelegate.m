@@ -466,6 +466,9 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [prevButton setToolTip:@"Previous Track"];
     [prevButton setTarget:self];
     [prevButton setAction:@selector(previousTrack:)];
+    unichar previousKey = NSLeftArrowFunctionKey;
+    [prevButton setKeyEquivalent:[NSString stringWithCharacters:&previousKey length:1]];
+    [prevButton setKeyEquivalentModifierMask:0];
     [content addSubview:prevButton];
 
     playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(347, 49, 46, 46)];
@@ -475,6 +478,8 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playPauseButton setToolTip:@"Play"];
     [playPauseButton setTarget:self];
     [playPauseButton setAction:@selector(togglePlayPause:)];
+    [playPauseButton setKeyEquivalent:@" "];
+    [playPauseButton setKeyEquivalentModifierMask:0];
     [content addSubview:playPauseButton];
 
     nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
@@ -484,6 +489,9 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [nextButton setToolTip:@"Next Track"];
     [nextButton setTarget:self];
     [nextButton setAction:@selector(nextTrack:)];
+    unichar nextKey = NSRightArrowFunctionKey;
+    [nextButton setKeyEquivalent:[NSString stringWithCharacters:&nextKey length:1]];
+    [nextButton setKeyEquivalentModifierMask:0];
     [content addSubview:nextButton];
 
     [window makeKeyAndOrderFront:nil];

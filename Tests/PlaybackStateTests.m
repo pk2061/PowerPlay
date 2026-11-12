@@ -11,6 +11,7 @@
     NSUInteger commandCount;
 }
 - (void)setTestPlaying:(BOOL)playing packetTime:(double)packetTime referenceTime:(double)referenceTime elapsed:(double)elapsed;
+- (void)setTestConnected:(BOOL)connected;
 - (NSString *)lastCommand;
 - (NSUInteger)commandCount;
 @end
@@ -25,6 +26,7 @@
         elapsedPlaybackTime = elapsed;
     }
 }
+- (void)setTestConnected:(BOOL)connected { incomingSessionActive = connected; }
 - (void)sendDACPCommand:(NSString *)command {
     [lastCommand release];
     lastCommand = [command copy];
@@ -32,6 +34,7 @@
 }
 - (NSString *)lastCommand { return lastCommand; }
 - (NSUInteger)commandCount { return commandCount; }
+- (BOOL)canControlSender { return incomingSessionActive; }
 - (void)dealloc {
     [lastCommand release];
     [super dealloc];
@@ -149,6 +152,15 @@ static BOOL WaitForDACPCommand(RAOPReceiver *receiver) {
     return ![receiver isDACPPlaybackCommandPending];
 }
 
+static BOOL SendTransportKey(NSWindow *window, unichar character, NSUInteger modifiers, unsigned short keyCode) {
+    NSString *characters = [NSString stringWithCharacters:&character length:1];
+    NSEvent *event = [NSEvent keyEventWithType:NSKeyDown location:NSZeroPoint modifierFlags:modifiers
+                                    timestamp:0 windowNumber:[window windowNumber] context:nil
+                                   characters:characters charactersIgnoringModifiers:characters
+                                    isARepeat:NO keyCode:keyCode];
+    return [window performKeyEquivalent:event];
+}
+
 int main(void) {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
     [NSApplication sharedApplication];
@@ -195,6 +207,26 @@ int main(void) {
     passed &= Check([receiver isPlaying] && [[button toolTip] isEqualToString:@"Pause"],
                     @"resumed audio must restore the pause button");
 
+    [delegate refreshUI];
+    NSWindow *window = [delegate valueForKey:@"window"];
+    passed &= Check(SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123) &&
+                    [receiver commandCount] == 3 && [[receiver lastCommand] isEqualToString:@"previtem"],
+                    @"left arrow should send previous track");
+    passed &= Check(SendTransportKey(window, ' ', 0, 49) &&
+                    [receiver commandCount] == 4 && [[receiver lastCommand] isEqualToString:@"playpause"],
+                    @"space should toggle playback");
+    passed &= Check(SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124) &&
+                    [receiver commandCount] == 5 && [[receiver lastCommand] isEqualToString:@"nextitem"],
+                    @"right arrow should send next track");
+    SendTransportKey(window, ' ', NSCommandKeyMask, 49);
+    passed &= Check([receiver commandCount] == 5, @"modified keys must not trigger transport shortcuts");
+    [receiver setTestConnected:NO];
+    [delegate refreshUI];
+    SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
+    SendTransportKey(window, ' ', 0, 49);
+    SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
+    passed &= Check([receiver commandCount] == 5, @"disconnected transport buttons must ignore shortcuts");
+
     [delegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
     [delegate release];
 
@@ -212,6 +244,8 @@ int main(void) {
         [dacpDelegate togglePlayPause:nil];
         passed &= Check([dacpReceiver isDACPPlaybackCommandPending], @"toggle should remain pending until its response");
         passed &= Check(![dacpButton isEnabled], @"button must be disabled while the toggle is pending");
+        passed &= Check(!SendTransportKey([dacpDelegate valueForKey:@"window"], ' ', 0, 49),
+                @"space must not trigger while the toggle is pending");
         [dacpReceiver togglePlayPause];
         [server allowResponse];
         passed &= Check(WaitForDACPCommand(dacpReceiver), @"pause command should complete");
