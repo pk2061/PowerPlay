@@ -576,6 +576,10 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     BOOL playing = [receiver isPlaying];
     [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
     [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];
+    BOOL controlsEnabled = [receiver isConnected] && [receiver canControlSender];
+    [prevButton setEnabled:controlsEnabled];
+    [playPauseButton setEnabled:controlsEnabled];
+    [nextButton setEnabled:controlsEnabled];
 }
 
 - (void)refreshPlaybackProgress:(NSTimer *)timer {

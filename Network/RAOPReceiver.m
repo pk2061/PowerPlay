@@ -651,11 +651,206 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 @implementation RAOPReceiver
 
+- (void)updateDACPIdentityFromHeaders:(NSDictionary *)headers {
+    NSString *newIdentifier = [headers objectForKey:@"dacp-id"];
+    NSString *newActiveRemote = [headers objectForKey:@"active-remote"];
+    BOOL shouldSearch = NO;
+
+    @synchronized(self) {
+        if ([newIdentifier isKindOfClass:[NSString class]] && [newIdentifier length] > 0 &&
+            ![newIdentifier isEqualToString:dacpIdentifier]) {
+            [dacpIdentifier release];
+            dacpIdentifier = [newIdentifier copy];
+            shouldSearch = YES;
+        }
+        if ([newActiveRemote isKindOfClass:[NSString class]] && [newActiveRemote length] > 0 &&
+            ![newActiveRemote isEqualToString:dacpActiveRemote]) {
+            [dacpActiveRemote release];
+            dacpActiveRemote = [newActiveRemote copy];
+            shouldSearch = YES;
+        }
+    }
+
+    if (shouldSearch) {
+        [self performSelectorOnMainThread:@selector(startDACPServiceDiscovery)
+                               withObject:nil waitUntilDone:NO];
+    }
+}
+
+- (void)startDACPServiceDiscovery {
+    NSString *identifier;
+    @synchronized(self) {
+        identifier = [dacpIdentifier copy];
+    }
+    if ([identifier length] == 0) {
+        [identifier release];
+        return;
+    }
+
+    NSString *normalizedIdentifier = [identifier uppercaseString];
+    if ([normalizedIdentifier length] < 16) {
+        NSString *padding = [@"0000000000000000" substringToIndex:
+            16 - [normalizedIdentifier length]];
+        normalizedIdentifier = [NSString stringWithFormat:@"%@%@", padding, normalizedIdentifier];
+    }
+    NSString *serviceName = [NSString stringWithFormat:@"iTunes_Ctrl_%@", normalizedIdentifier];
+    [identifier release];
+
+    if ([serviceName isEqualToString:dacpSearchName] && dacpServiceBrowser != nil) {
+        return;
+    }
+    [self stopDACPServiceDiscovery];
+    [dacpSearchName release];
+    dacpSearchName = [serviceName copy];
+    dacpServiceBrowser = [[NSNetServiceBrowser alloc] init];
+    [dacpServiceBrowser setDelegate:self];
+    [dacpServiceBrowser searchForServicesOfType:@"_dacp._tcp." inDomain:@"local."];
+}
+
+- (void)stopDACPServiceDiscovery {
+    [dacpServiceBrowser stop];
+    [dacpServiceBrowser setDelegate:nil];
+    [dacpServiceBrowser release];
+    dacpServiceBrowser = nil;
+    [dacpService stop];
+    [dacpService setDelegate:nil];
+    [dacpService release];
+    dacpService = nil;
+    @synchronized(self) {
+        [dacpAddress release];
+        dacpAddress = nil;
+        dacpPort = 0;
+    }
+    [self notifyMetadataDidChange];
+}
+
+- (void)sendDACPCommand:(NSString *)command {
+    NSString *address;
+    NSString *activeRemote;
+    NSInteger port;
+    @synchronized(self) {
+        address = [dacpAddress retain];
+        activeRemote = [dacpActiveRemote retain];
+        port = dacpPort;
+    }
+    NSCharacterSet *lineBreaks = [NSCharacterSet characterSetWithCharactersInString:@"\r\n"];
+    if ([address length] == 0 || [activeRemote length] == 0 ||
+        [activeRemote length] > 128 ||
+        [activeRemote rangeOfCharacterFromSet:lineBreaks].location != NSNotFound || port <= 0) {
+        NSLog(@"RAOP: cannot send DACP command %@; sender remote service is not ready", command);
+        [address release];
+        [activeRemote release];
+        return;
+    }
+
+    NSDictionary *request = [NSDictionary dictionaryWithObjectsAndKeys:
+        command, @"command", address, @"address", activeRemote, @"activeRemote",
+        [NSNumber numberWithInteger:port], @"port", nil];
+    [NSThread detachNewThreadSelector:@selector(sendDACPCommandOnThread:)
+                             toTarget:self withObject:request];
+    [address release];
+    [activeRemote release];
+}
+
+- (void)sendDACPCommandOnThread:(NSDictionary *)request {
+    NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    NSString *command = [request objectForKey:@"command"];
+    NSString *host = [request objectForKey:@"address"];
+    NSString *activeRemote = [request objectForKey:@"activeRemote"];
+    NSInteger port = [[request objectForKey:@"port"] integerValue];
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    char portString[16];
+    snprintf(portString, sizeof(portString), "%ld", (long)port);
+
+    struct addrinfo *addresses = NULL;
+    int lookupResult = getaddrinfo([host UTF8String], portString, &hints, &addresses);
+    if (lookupResult != 0) {
+        NSLog(@"RAOP: DACP %@ address lookup failed (%d)", command, lookupResult);
+        [threadPool drain];
+        return;
+    }
+
+    int socketHandle = -1;
+    struct addrinfo *address;
+    for (address = addresses; address != NULL; address = address->ai_next) {
+        socketHandle = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
+        if (socketHandle < 0) {
+            continue;
+        }
+        int noSignal = 1;
+        setsockopt(socketHandle, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
+        struct timeval timeout;
+        timeout.tv_sec = 2;
+        timeout.tv_usec = 0;
+        setsockopt(socketHandle, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        setsockopt(socketHandle, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+        if (connect(socketHandle, address->ai_addr, address->ai_addrlen) == 0) {
+            break;
+        }
+        close(socketHandle);
+        socketHandle = -1;
+    }
+    freeaddrinfo(addresses);
+    if (socketHandle < 0) {
+        NSLog(@"RAOP: DACP %@ connection failed", command);
+        [threadPool drain];
+        return;
+    }
+
+    NSString *httpRequest = [NSString stringWithFormat:
+        @"GET /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@:%ld\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n\r\n",
+        command, host, (long)port, activeRemote];
+    NSData *requestData = [httpRequest dataUsingEncoding:NSUTF8StringEncoding];
+    const unsigned char *bytes = [requestData bytes];
+    NSUInteger remaining = [requestData length];
+    while (remaining > 0) {
+        ssize_t sent = send(socketHandle, bytes, remaining, 0);
+        if (sent < 0 && errno == EINTR) {
+            continue;
+        }
+        if (sent <= 0) {
+            break;
+        }
+        bytes += sent;
+        remaining -= (NSUInteger)sent;
+    }
+
+    if (remaining == 0) {
+        char response[1024];
+        ssize_t received = recv(socketHandle, response, sizeof(response) - 1, 0);
+        if (received > 0) {
+            response[received] = '\0';
+            char *lineEnd = strstr(response, "\r\n");
+            if (lineEnd != NULL) {
+                *lineEnd = '\0';
+            }
+            NSLog(@"RAOP: DACP %@ response: %s", command, response);
+        } else {
+            NSLog(@"RAOP: DACP %@ sent; no response received (%d)", command, errno);
+        }
+    } else {
+        NSLog(@"RAOP: DACP %@ request send failed (%d)", command, errno);
+    }
+
+    close(socketHandle);
+    [threadPool drain];
+}
+
 - (id)init {
     self = [super init];
     if (self != nil) {
         publishedService = nil;
         deviceIdentifier = nil;
+        dacpServiceBrowser = nil;
+        dacpService = nil;
+        dacpIdentifier = nil;
+        dacpActiveRemote = nil;
+        dacpAddress = nil;
+        dacpSearchName = nil;
+        dacpPort = 0;
         listenerSocket = -1;
         rtpControlSocket = -1;
         acceptingRTSP = NO;
@@ -736,6 +931,10 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
     [publishedService release];
     [deviceIdentifier release];
+    [dacpIdentifier release];
+    [dacpActiveRemote release];
+    [dacpAddress release];
+    [dacpSearchName release];
     [connectedDeviceName release];
     [currentTitle release];
     [coverArtData release];
@@ -843,6 +1042,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         close(listenerSocket);
         listenerSocket = -1;
     }
+    if ([NSThread isMainThread]) {
+        [self stopDACPServiceDiscovery];
+    } else {
+        [self performSelectorOnMainThread:@selector(stopDACPServiceDiscovery)
+                               withObject:nil waitUntilDone:YES];
+    }
     [self teardownSession];
 }
 
@@ -929,9 +1134,16 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         [connectedDeviceName release];
         connectedDeviceName = nil;
         hasExplicitClientName = NO;
+        [dacpIdentifier release];
+        dacpIdentifier = nil;
+        [dacpActiveRemote release];
+        dacpActiveRemote = nil;
         [hostAddress release];
         hostAddress = nil;
     }
+
+    [self performSelectorOnMainThread:@selector(stopDACPServiceDiscovery)
+                           withObject:nil waitUntilDone:NO];
 
     [self notifyMetadataDidChange];
 }
@@ -993,6 +1205,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
         NSString *method = [[requestParts objectAtIndex:0] uppercaseString];
         NSDictionary *headers = [request objectForKey:@"headers"];
+        [self updateDACPIdentityFromHeaders:headers];
         NSData *requestBodyData = [request objectForKey:@"body"];
         NSString *reportedClientName = [headers objectForKey:@"x-apple-client-name"];
         if (reportedClientName == nil || [reportedClientName length] == 0) {
@@ -2497,8 +2710,55 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 #pragma mark - NSNetServiceDelegate
 
+- (void)netServiceBrowser:(NSNetServiceBrowser *)browser
+           didFindService:(NSNetService *)service
+               moreComing:(BOOL)moreComing {
+    (void)moreComing;
+    if (browser != dacpServiceBrowser || dacpSearchName == nil ||
+        [[service name] caseInsensitiveCompare:dacpSearchName] != NSOrderedSame) {
+        return;
+    }
+
+    [dacpService release];
+    dacpService = [service retain];
+    [dacpService setDelegate:self];
+    [dacpService resolveWithTimeout:5.0];
+}
+
+- (void)netServiceBrowser:(NSNetServiceBrowser *)browser
+         didRemoveService:(NSNetService *)service
+               moreComing:(BOOL)moreComing {
+    (void)moreComing;
+    if (browser == dacpServiceBrowser && service == dacpService) {
+        @synchronized(self) {
+            [dacpAddress release];
+            dacpAddress = nil;
+            dacpPort = 0;
+        }
+        [dacpService setDelegate:nil];
+        [dacpService release];
+        dacpService = nil;
+        [self notifyMetadataDidChange];
+    }
+}
+
 - (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData {
     if (sender == nil) {
+        return;
+    }
+
+    if (sender == dacpService) {
+        NSString *resolvedAddress = [self addressStringFromData:addressData];
+        if (resolvedAddress != nil && [sender port] > 0) {
+            @synchronized(self) {
+                [dacpAddress release];
+                dacpAddress = [resolvedAddress copy];
+                dacpPort = [sender port];
+            }
+            NSLog(@"RAOP: resolved sender DACP service at %@:%ld",
+                  resolvedAddress, (long)[sender port]);
+            [self notifyMetadataDidChange];
+        }
         return;
     }
 
@@ -2528,62 +2788,19 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)play {
-    if (controlSocket < 0) {
-        return;
-    }
-
-    if (!rtspSessionEstablished) {
-        [self beginRTSPSession];
-    }
-
-    if (!isSetupComplete) {
-        NSMutableDictionary *setupHeaders = [NSMutableDictionary dictionary];
-        NSString *transportHeader = [NSString stringWithFormat:@"RTP/AVP/UDP;unicast;mode=play;control_port=%ld;timing_port=%ld;", (long)audioPort, (long)timingPort];
-        [setupHeaders setObject:transportHeader forKey:@"Transport"];
-        [self sendRTSPCommand:@"SETUP" path:@"/stream=0" headers:setupHeaders body:nil];
-    }
-
-    NSMutableDictionary *playHeaders = [NSMutableDictionary dictionary];
-    [playHeaders setObject:@"0.0-" forKey:@"Range"];
-    [self sendRTSPCommand:@"PLAY" path:@"/" headers:playHeaders body:nil];
-
-    isPlaying = YES;
-    rtpSessionReady = YES;
-    [currentTitle release];
-    currentTitle = [[NSString alloc] initWithString:@"Playing via AirPlay"];
-    if (audioPlayer != nil) {
-        [audioPlayer start];
-    }
+    [self sendDACPCommand:@"play"];
 }
 
 - (void)pause {
-    if (controlSocket < 0) {
-        return;
-    }
-
-    if ([self isSessionReady]) {
-        [self sendRTSPCommand:@"PAUSE" path:@"/" headers:nil body:nil];
-    }
-    isPlaying = NO;
-    if (audioPlayer != nil) {
-        [audioPlayer stop];
-    }
+    [self sendDACPCommand:@"pause"];
 }
 
 - (void)nextTrack {
-    if (controlSocket < 0) {
-        return;
-    }
-
-    [self sendRTSPCommand:@"GET_PARAMETER" path:@"/" headers:[NSDictionary dictionaryWithObject:@"next" forKey:@"Scale"] body:nil];
+    [self sendDACPCommand:@"nextitem"];
 }
 
 - (void)previousTrack {
-    if (controlSocket < 0) {
-        return;
-    }
-
-    [self sendRTSPCommand:@"GET_PARAMETER" path:@"/" headers:[NSDictionary dictionaryWithObject:@"previous" forKey:@"Scale"] body:nil];
+    [self sendDACPCommand:@"previtem"];
 }
 
 - (void)setVolume:(float)newVolume {
@@ -2688,6 +2905,17 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         value = [coverArtData retain];
     }
     return [value autorelease];
+}
+
+- (BOOL)canControlSender {
+    BOOL available;
+    @synchronized(self) {
+        available = incomingSessionActive &&
+                    [dacpAddress length] > 0 &&
+                    dacpPort > 0 &&
+                    [dacpActiveRemote length] > 0;
+    }
+    return available;
 }
 
 - (BOOL)isPlaying {

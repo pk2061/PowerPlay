@@ -27,9 +27,16 @@ extern NSString * const PowerPlayMetadataDidChangeNotification;
 extern NSString * const PowerPlayVolumeDidChangeNotification;
 extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
 
-@interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
+@interface RAOPReceiver : NSObject <NSNetServiceDelegate, NSNetServiceBrowserDelegate> {
     NSNetService *publishedService;
     NSNetService *resolvedService;
+    NSNetServiceBrowser *dacpServiceBrowser;
+    NSNetService *dacpService;
+    NSString *dacpIdentifier;
+    NSString *dacpActiveRemote;
+    NSString *dacpAddress;
+    NSString *dacpSearchName;
+    NSInteger dacpPort;
     NSString *deviceIdentifier;
     int listenerSocket;
     int rtpControlSocket;
@@ -119,6 +126,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
 - (double)elapsedPlaybackTimeValue;
 - (double)trackDurationValue;
 - (NSData *)coverArtData;
+- (BOOL)canControlSender;
 - (BOOL)isPlaying;
 - (BOOL)isConnected;
 - (BOOL)isSessionReady;
