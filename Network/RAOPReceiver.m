@@ -1360,8 +1360,10 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 status = @"455 Method Not Valid in This State";
             } else {
                 @synchronized(self) {
+                    elapsedPlaybackTime = [self elapsedPlaybackTimeValue];
                     isPlaying = YES;
-                    progressReferenceTime = PowerPlayCurrentTime();
+                    progressReferenceTime = 0.0;
+                    lastAudioPacketTime = 0.0;
                 }
                 NSLog(@"RAOP: sender resumed playback");
                 [audioPlayer start];
@@ -1369,12 +1371,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             }
         } else if ([method isEqualToString:@"PAUSE"]) {
             @synchronized(self) {
-                if (isPlaying && progressReferenceTime > 0.0) {
-                    elapsedPlaybackTime += PowerPlayCurrentTime() - progressReferenceTime;
-                    if (trackDuration > 0.0 && elapsedPlaybackTime > trackDuration) {
-                        elapsedPlaybackTime = trackDuration;
-                    }
-                }
+                elapsedPlaybackTime = [self elapsedPlaybackTimeValue];
                 progressResumeOffset = elapsedPlaybackTime;
                 resumeProgressPending = YES;
                 progressIsRelative = NO;
@@ -1486,7 +1483,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                                           fabs(trackDuration - newDuration) >= 0.05;
                                         if (playbackActive) {
                                             elapsedPlaybackTime = newElapsed;
-                                            progressReferenceTime = now;
+                                            progressReferenceTime = lastAudioPacketTime > 0.0 ? now : 0.0;
                                             lastProgressStartTimestamp = startTimestamp;
                                             lastProgressCurrentTimestamp = currentTimestamp;
                                             hasProgressTimestamp = YES;
@@ -1940,18 +1937,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             gettimeofday(&packetTime, NULL);
             lastAudioPacketMicros = (uint64_t)packetTime.tv_sec * 1000000ULL + (uint64_t)packetTime.tv_usec;
             double packetTimeSeconds = (double)packetTime.tv_sec + ((double)packetTime.tv_usec / 1000000.0);
-            @synchronized(self) {
-                if (isPlaying && lastAudioPacketTime > 0.0 &&
-                    packetTimeSeconds - lastAudioPacketTime > 1.5) {
-                    double activeUntil = lastAudioPacketTime + 1.5;
-                    if (progressReferenceTime > 0.0 && activeUntil > progressReferenceTime) {
-                        elapsedPlaybackTime += activeUntil - progressReferenceTime;
-                    }
-                    progressReferenceTime = packetTimeSeconds;
-                    NSLog(@"RAOP: audio RTP resumed after silence");
-                }
-                lastAudioPacketTime = packetTimeSeconds;
-            }
             loggedAudioSilence = NO;
             NSData *packet = [NSData dataWithBytes:(void *)packetBuffer
                                              length:(NSUInteger)received];
@@ -2004,6 +1989,20 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             NSData *pcmData = [alacDecoder decodePacket:decryptedPayload];
             if (pcmData == nil || [pcmData length] == 0) {
                 continue;
+            }
+            @synchronized(self) {
+                if (isPlaying && (lastAudioPacketTime == 0.0 ||
+                    packetTimeSeconds - lastAudioPacketTime > 1.5)) {
+                    if (lastAudioPacketTime > 0.0) {
+                        double activeUntil = lastAudioPacketTime + 1.5;
+                        if (progressReferenceTime > 0.0 && activeUntil > progressReferenceTime) {
+                            elapsedPlaybackTime += activeUntil - progressReferenceTime;
+                        }
+                        NSLog(@"RAOP: audio RTP resumed after silence");
+                    }
+                    progressReferenceTime = packetTimeSeconds;
+                }
+                lastAudioPacketTime = packetTimeSeconds;
             }
             decodedPacketCount++;
             [audioPlayer enqueuePCMData:pcmData];
@@ -2861,6 +2860,10 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [self sendDACPCommand:@"pause"];
 }
 
+- (void)togglePlayPause {
+    [self sendDACPCommand:@"playpause"];
+}
+
 - (void)nextTrack {
     [self sendDACPCommand:@"nextitem"];
 }
@@ -2941,7 +2944,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     double value;
     @synchronized(self) {
         value = elapsedPlaybackTime;
-        if (isPlaying && progressReferenceTime > 0.0) {
+        if (isPlaying && lastAudioPacketTime > 0.0 && progressReferenceTime > 0.0) {
             double currentTime = PowerPlayCurrentTime();
             if (lastAudioPacketTime > 0.0 && currentTime - lastAudioPacketTime > 1.5) {
                 currentTime = lastAudioPacketTime + 1.5;
@@ -2988,11 +2991,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (BOOL)isPlaying {
     BOOL value;
     @synchronized(self) {
-        value = isPlaying;
-        if (value && lastAudioPacketTime > 0.0 &&
-            PowerPlayCurrentTime() - lastAudioPacketTime > 1.5) {
-            value = NO;
-        }
+        value = isPlaying && lastAudioPacketTime > 0.0 &&
+            PowerPlayCurrentTime() - lastAudioPacketTime <= 1.5;
     }
     return value;
 }

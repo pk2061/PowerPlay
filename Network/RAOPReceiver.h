@@ -129,6 +129,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
 - (NSData *)coverArtData;
 - (BOOL)canControlSender;
 - (BOOL)isPlaying;
+- (void)togglePlayPause;
 - (BOOL)isConnected;
 - (BOOL)isSessionReady;
 - (void)teardownSession;

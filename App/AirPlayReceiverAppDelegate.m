@@ -562,20 +562,6 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 
     [self refreshPlaybackProgress:nil];
 
-    if ([receiver isConnected]) {
-        NSString *connectedName = [receiver connectedDeviceName];
-        if (connectedName == nil || [connectedName length] == 0) {
-            connectedName = @"AirPlay device";
-        }
-        [statusText setStringValue:[NSString stringWithFormat:@"Playing via AirPlay from %@", connectedName]];
-    } else if ([receiver isPlaying]) {
-        [statusText setStringValue:@"Playing via AirPlay"];
-    } else {
-        [statusText setStringValue:[receiver isConnected] ? @"Ready" : @"Waiting for AirPlay source..."];
-    }
-    BOOL playing = [receiver isPlaying];
-    [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
-    [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];
     BOOL controlsEnabled = [receiver isConnected] && [receiver canControlSender];
     [prevButton setEnabled:controlsEnabled];
     [playPauseButton setEnabled:controlsEnabled];
@@ -600,6 +586,17 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
         elapsedSeconds / 60, elapsedSeconds % 60]];
     [playbackTimeText setStringValue:durationText];
     BOOL playing = [receiver isPlaying];
+    [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
+    [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];
+    if ([receiver isConnected]) {
+        NSString *connectedName = [receiver connectedDeviceName];
+        if (connectedName == nil || [connectedName length] == 0) {
+            connectedName = @"AirPlay device";
+        }
+        [statusText setStringValue:[NSString stringWithFormat:playing ? @"Playing via AirPlay from %@" : @"Connected to %@", connectedName]];
+    } else {
+        [statusText setStringValue:playing ? @"Playing via AirPlay" : @"Waiting for AirPlay source..."];
+    }
     if (duration > 0.0) {
         if ([playbackProgress isIndeterminate]) {
             [playbackProgress stopAnimation:nil];
@@ -663,11 +660,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 }
 
 - (IBAction)togglePlayPause:(id)sender {
-    if ([receiver isPlaying]) {
-        [receiver pause];
-    } else {
-        [receiver play];
-    }
+    [receiver togglePlayPause];
     [self refreshUI];
 }
 
