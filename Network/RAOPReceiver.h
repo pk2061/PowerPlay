@@ -27,7 +27,7 @@ extern NSString * const PowerPlayMetadataDidChangeNotification;
 extern NSString * const PowerPlayVolumeDidChangeNotification;
 extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
 
-@interface RAOPReceiver : NSObject <NSNetServiceDelegate, NSNetServiceBrowserDelegate> {
+@interface RAOPReceiver : NSObject <NSNetServiceDelegate> {
     NSNetService *publishedService;
     NSNetService *resolvedService;
     NSNetServiceBrowser *dacpServiceBrowser;
