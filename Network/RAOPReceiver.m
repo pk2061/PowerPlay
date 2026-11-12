@@ -729,6 +729,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     @synchronized(self) {
         [dacpAddress release];
         dacpAddress = nil;
+        [dacpAddressData release];
+        dacpAddressData = nil;
         dacpPort = 0;
     }
     [self notifyMetadataDidChange];
@@ -736,29 +738,34 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 - (void)sendDACPCommand:(NSString *)command {
     NSString *address;
+    NSData *addressData;
     NSString *activeRemote;
     NSInteger port;
     @synchronized(self) {
         address = [dacpAddress retain];
+        addressData = [dacpAddressData retain];
         activeRemote = [dacpActiveRemote retain];
         port = dacpPort;
     }
     NSCharacterSet *lineBreaks = [NSCharacterSet characterSetWithCharactersInString:@"\r\n"];
-    if ([address length] == 0 || [activeRemote length] == 0 ||
+    if ([address length] == 0 || [addressData length] < sizeof(struct sockaddr) ||
+        [activeRemote length] == 0 ||
         [activeRemote length] > 128 ||
         [activeRemote rangeOfCharacterFromSet:lineBreaks].location != NSNotFound || port <= 0) {
         NSLog(@"RAOP: cannot send DACP command %@; sender remote service is not ready", command);
         [address release];
+        [addressData release];
         [activeRemote release];
         return;
     }
 
     NSDictionary *request = [NSDictionary dictionaryWithObjectsAndKeys:
-        command, @"command", address, @"address", activeRemote, @"activeRemote",
+        command, @"command", address, @"address", addressData, @"addressData", activeRemote, @"activeRemote",
         [NSNumber numberWithLong:(long)port], @"port", nil];
     [NSThread detachNewThreadSelector:@selector(sendDACPCommandOnThread:)
                              toTarget:self withObject:request];
     [address release];
+    [addressData release];
     [activeRemote release];
 }
 
@@ -766,53 +773,42 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
     NSString *command = [request objectForKey:@"command"];
     NSString *host = [request objectForKey:@"address"];
+    NSData *socketAddressData = [request objectForKey:@"addressData"];
     NSString *activeRemote = [request objectForKey:@"activeRemote"];
     NSInteger port = [[request objectForKey:@"port"] longValue];
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    char portString[16];
-    snprintf(portString, sizeof(portString), "%ld", (long)port);
-
-    struct addrinfo *addresses = NULL;
-    int lookupResult = getaddrinfo([host UTF8String], portString, &hints, &addresses);
-    if (lookupResult != 0) {
-        NSLog(@"RAOP: DACP %@ address lookup failed (%d)", command, lookupResult);
+    const struct sockaddr *remoteAddress = (const struct sockaddr *)[socketAddressData bytes];
+    if (remoteAddress == NULL || [socketAddressData length] < sizeof(struct sockaddr)) {
+        NSLog(@"RAOP: DACP %@ has an invalid resolved socket address", command);
         [threadPool drain];
         return;
     }
 
-    int socketHandle = -1;
-    struct addrinfo *address;
-    for (address = addresses; address != NULL; address = address->ai_next) {
-        socketHandle = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
-        if (socketHandle < 0) {
-            continue;
-        }
-        int noSignal = 1;
-        setsockopt(socketHandle, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
-        struct timeval timeout;
-        timeout.tv_sec = 2;
-        timeout.tv_usec = 0;
-        setsockopt(socketHandle, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-        setsockopt(socketHandle, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-        if (connect(socketHandle, address->ai_addr, address->ai_addrlen) == 0) {
-            break;
-        }
-        close(socketHandle);
-        socketHandle = -1;
-    }
-    freeaddrinfo(addresses);
+    int socketHandle = socket(remoteAddress->sa_family, SOCK_STREAM, 0);
     if (socketHandle < 0) {
-        NSLog(@"RAOP: DACP %@ connection failed", command);
+        NSLog(@"RAOP: DACP %@ socket creation failed (%d)", command, errno);
+        [threadPool drain];
+        return;
+    }
+    int noSignal = 1;
+    setsockopt(socketHandle, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
+    struct timeval timeout;
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    setsockopt(socketHandle, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(socketHandle, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    if (connect(socketHandle, remoteAddress, (socklen_t)[socketAddressData length]) != 0) {
+        NSLog(@"RAOP: DACP %@ connection to %@:%ld failed (%d)", command, host, (long)port, errno);
+        close(socketHandle);
         [threadPool drain];
         return;
     }
 
+    NSString *hostHeader = remoteAddress->sa_family == AF_INET6 ?
+        [NSString stringWithFormat:@"[%@]:%ld", host, (long)port] :
+        [NSString stringWithFormat:@"%@:%ld", host, (long)port];
     NSString *httpRequest = [NSString stringWithFormat:
-        @"GET /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@:%ld\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n\r\n",
-        command, host, (long)port, activeRemote];
+        @"GET /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n\r\n",
+        command, hostHeader, activeRemote];
     NSData *requestData = [httpRequest dataUsingEncoding:NSUTF8StringEncoding];
     const unsigned char *bytes = [requestData bytes];
     NSUInteger remaining = [requestData length];
@@ -859,6 +855,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpIdentifier = nil;
         dacpActiveRemote = nil;
         dacpAddress = nil;
+        dacpAddressData = nil;
         dacpSearchName = nil;
         dacpPort = 0;
         listenerSocket = -1;
@@ -944,6 +941,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [dacpIdentifier release];
     [dacpActiveRemote release];
     [dacpAddress release];
+    [dacpAddressData release];
     [dacpSearchName release];
     [connectedDeviceName release];
     [currentTitle release];
@@ -1052,12 +1050,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         close(listenerSocket);
         listenerSocket = -1;
     }
-    if ([[NSThread currentThread] isEqual:[NSThread mainThread]]) {
-        [self stopDACPServiceDiscovery];
-    } else {
-        [self performSelectorOnMainThread:@selector(stopDACPServiceDiscovery)
-                               withObject:nil waitUntilDone:YES];
-    }
+    [self performSelectorOnMainThread:@selector(stopDACPServiceDiscovery)
+                           withObject:nil waitUntilDone:YES];
     [self teardownSession];
 }
 
@@ -2722,13 +2716,25 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 - (void)netServiceDidResolveAddress:(NSNetService *)sender {
     NSArray *addresses = [sender addresses];
+    NSData *fallbackAddress = nil;
     NSUInteger addressIndex;
     for (addressIndex = 0; addressIndex < [addresses count]; addressIndex++) {
         NSData *addressData = [addresses objectAtIndex:addressIndex];
-        if ([self addressStringFromData:addressData] != nil) {
+        if ([addressData length] < sizeof(struct sockaddr)) {
+            continue;
+        }
+        const struct sockaddr *socketAddress = (const struct sockaddr *)[addressData bytes];
+        if (socketAddress->sa_family == AF_INET) {
             [self netService:sender didResolveAddress:addressData];
             return;
         }
+        if (socketAddress->sa_family == AF_INET6 && fallbackAddress == nil) {
+            fallbackAddress = addressData;
+        }
+    }
+    if (fallbackAddress != nil) {
+        [self netService:sender didResolveAddress:fallbackAddress];
+        return;
     }
     if (sender == dacpService) {
         NSLog(@"RAOP: DACP service %@ resolved without a usable IP address", [sender name]);
@@ -2771,6 +2777,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         @synchronized(self) {
             [dacpAddress release];
             dacpAddress = nil;
+            [dacpAddressData release];
+            dacpAddressData = nil;
             dacpPort = 0;
         }
         [dacpService setDelegate:nil];
@@ -2803,6 +2811,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             @synchronized(self) {
                 [dacpAddress release];
                 dacpAddress = [resolvedAddress copy];
+                [dacpAddressData release];
+                dacpAddressData = [addressData copy];
                 dacpPort = resolvedPort;
             }
             NSLog(@"RAOP: resolved sender DACP service at %@:%ld",
@@ -2968,6 +2978,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     @synchronized(self) {
         available = incomingSessionActive &&
                     [dacpAddress length] > 0 &&
+                    [dacpAddressData length] >= sizeof(struct sockaddr) &&
                     dacpPort > 0 &&
                     [dacpActiveRemote length] > 0;
     }

@@ -35,6 +35,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
     NSString *dacpIdentifier;
     NSString *dacpActiveRemote;
     NSString *dacpAddress;
+    NSData *dacpAddressData;
     NSString *dacpSearchName;
     NSInteger dacpPort;
     NSString *deviceIdentifier;
