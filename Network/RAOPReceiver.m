@@ -2713,6 +2713,21 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 #pragma mark - NSNetServiceDelegate
 
+- (void)netServiceDidResolveAddress:(NSNetService *)sender {
+    NSArray *addresses = [sender addresses];
+    NSUInteger addressIndex;
+    for (addressIndex = 0; addressIndex < [addresses count]; addressIndex++) {
+        NSData *addressData = [addresses objectAtIndex:addressIndex];
+        if ([self addressStringFromData:addressData] != nil) {
+            [self netService:sender didResolveAddress:addressData];
+            return;
+        }
+    }
+    if (sender == dacpService) {
+        NSLog(@"RAOP: DACP service %@ resolved without a usable IP address", [sender name]);
+    }
+}
+
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
            didFindService:(NSNetService *)service
                moreComing:(BOOL)moreComing {
