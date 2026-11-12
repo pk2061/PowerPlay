@@ -257,6 +257,21 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 
 @end
 
+@interface PowerPlayStatusBarView : NSView
+@end
+
+@implementation PowerPlayStatusBarView
+
+- (void)drawRect:(NSRect)dirtyRect {
+    (void)dirtyRect;
+    [[NSColor colorWithCalibratedRed:0.92 green:0.92 blue:0.92 alpha:1.0] set];
+    NSRectFill([self bounds]);
+    [[NSColor colorWithCalibratedRed:0.78 green:0.78 blue:0.78 alpha:1.0] set];
+    NSRectFill(NSMakeRect(0, NSHeight([self bounds]) - 1, NSWidth([self bounds]), 1));
+}
+
+@end
+
 @interface PowerPlayClickableTextField : NSTextField
 @end
 
@@ -347,7 +362,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 }
 
 - (void)buildUI {
-    NSRect frame = NSMakeRect(0, 0, 560, 360);
+    NSRect frame = NSMakeRect(0, 0, 540, 300);
     window = [[NSWindow alloc] initWithContentRect:frame
                                          styleMask:(NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask)
                                            backing:NSBackingStoreBuffered
@@ -358,7 +373,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 
     NSView *content = [window contentView];
 
-    coverView = [[CoverArtView alloc] initWithFrame:NSMakeRect(20, 90, 180, 180)];
+    coverView = [[CoverArtView alloc] initWithFrame:NSMakeRect(20, 70, 180, 180)];
     [content addSubview:coverView];
 
     titleText = [[PowerPlayScrollingTextField alloc] initWithFrame:NSMakeRect(220, 220, 300, 28)];
@@ -388,7 +403,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [albumText setStringValue:@"Current Track"];
     [content addSubview:albumText];
 
-    elapsedTimeText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 139, 42, 18)];
+    elapsedTimeText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 129, 42, 18)];
     [elapsedTimeText setEditable:NO];
     [elapsedTimeText setBordered:NO];
     [elapsedTimeText setDrawsBackground:NO];
@@ -397,7 +412,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [elapsedTimeText setStringValue:@"0:00"];
     [content addSubview:elapsedTimeText];
 
-    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 141, 200, 14)];
+    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 131, 190, 14)];
     [playbackProgress setStyle:NSProgressIndicatorBarStyle];
     [playbackProgress setIndeterminate:NO];
     [playbackProgress setMinValue:0.0];
@@ -405,7 +420,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playbackProgress setDoubleValue:0.0];
     [content addSubview:playbackProgress];
 
-    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(480, 139, 70, 18)];
+    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(470, 129, 70, 18)];
     [playbackTimeText setEditable:NO];
     [playbackTimeText setBordered:NO];
     [playbackTimeText setDrawsBackground:NO];
@@ -419,20 +434,24 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playbackTimeText setStringValue:@"0:00"];
     [content addSubview:playbackTimeText];
 
-    statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 520, 22)];
+    PowerPlayStatusBarView *statusBar = [[PowerPlayStatusBarView alloc]
+        initWithFrame:NSMakeRect(0, 0, 540, 28)];
+    [content addSubview:statusBar];
+
+    statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 3, 500, 22)];
     [statusText setEditable:NO];
     [statusText setBordered:NO];
     [statusText setDrawsBackground:NO];
     [statusText setFont:[NSFont systemFontOfSize:11]];
-    [statusText setTextColor:[NSColor grayColor]];
+    [statusText setTextColor:[NSColor darkGrayColor]];
     [statusText setStringValue:@"Waiting for AirPlay source..."];
     [content addSubview:statusText];
 
     PowerPlaySpeakerIconView *speakerIcon = [[PowerPlaySpeakerIconView alloc]
-        initWithFrame:NSMakeRect(220, 114, 16, 16)];
+        initWithFrame:NSMakeRect(220, 102, 16, 16)];
     [content addSubview:speakerIcon];
 
-    volumeSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(242, 110, 180, 24)];
+    volumeSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(242, 98, 180, 24)];
     [volumeSlider setMinValue:0.0];
     [volumeSlider setMaxValue:1.0];
     [volumeSlider setFloatValue:0.5];
@@ -440,7 +459,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [volumeSlider setAction:@selector(changeVolume:)];
     [content addSubview:volumeSlider];
 
-    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(287, 61, 46, 46)];
+    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(287, 49, 46, 46)];
     [prevButton setBezelStyle:NSCircularBezelStyle];
     [prevButton setImage:PowerPlayTransportButtonImage(PowerPlayPreviousButton)];
     [prevButton setImagePosition:NSImageOnly];
@@ -449,7 +468,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [prevButton setAction:@selector(previousTrack:)];
     [content addSubview:prevButton];
 
-    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(347, 61, 46, 46)];
+    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(347, 49, 46, 46)];
     [playPauseButton setBezelStyle:NSCircularBezelStyle];
     [playPauseButton setImage:PowerPlayTransportButtonImage(PowerPlayPlayButton)];
     [playPauseButton setImagePosition:NSImageOnly];
@@ -458,7 +477,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playPauseButton setAction:@selector(togglePlayPause:)];
     [content addSubview:playPauseButton];
 
-    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 61, 46, 46)];
+    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
     [nextButton setBezelStyle:NSCircularBezelStyle];
     [nextButton setImage:PowerPlayTransportButtonImage(PowerPlayNextButton)];
     [nextButton setImagePosition:NSImageOnly];
