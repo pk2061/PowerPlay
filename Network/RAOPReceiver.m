@@ -672,6 +672,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     }
 
     if (shouldSearch) {
+        NSLog(@"RAOP: received sender DACP identity (DACP-ID present=%d, Active-Remote present=%d)",
+              [newIdentifier length] > 0, [newActiveRemote length] > 0);
         [self performSelectorOnMainThread:@selector(startDACPServiceDiscovery)
                                withObject:nil waitUntilDone:NO];
     }
@@ -705,6 +707,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     dacpServiceBrowser = [[NSNetServiceBrowser alloc] init];
     [dacpServiceBrowser setDelegate:self];
     [dacpServiceBrowser searchForServicesOfType:@"_dacp._tcp." inDomain:@"local."];
+    NSLog(@"RAOP: searching for DACP Bonjour service %@", dacpSearchName);
 }
 
 - (void)stopDACPServiceDiscovery {
@@ -2714,8 +2717,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
            didFindService:(NSNetService *)service
                moreComing:(BOOL)moreComing {
     (void)moreComing;
-    if (browser != dacpServiceBrowser || dacpSearchName == nil ||
-        [[service name] caseInsensitiveCompare:dacpSearchName] != NSOrderedSame) {
+    if (browser != dacpServiceBrowser) {
+        return;
+    }
+    BOOL matchesDACPIdentifier = dacpSearchName != nil &&
+        [[service name] caseInsensitiveCompare:dacpSearchName] == NSOrderedSame;
+    NSLog(@"RAOP: discovered DACP service %@ (matching sender=%d)",
+          [service name], matchesDACPIdentifier);
+    if (!matchesDACPIdentifier) {
         return;
     }
 
@@ -2723,6 +2732,13 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     dacpService = [service retain];
     [dacpService setDelegate:self];
     [dacpService resolveWithTimeout:5.0];
+}
+
+- (void)netServiceBrowser:(NSNetServiceBrowser *)browser
+             didNotSearch:(NSDictionary *)errorDict {
+    if (browser == dacpServiceBrowser) {
+        NSLog(@"RAOP: DACP Bonjour search failed: %@", errorDict);
+    }
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
@@ -2776,6 +2792,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
     if ([self openControlSocket]) {
         [self beginRTSPSession];
+    }
+}
+
+- (void)netService:(NSNetService *)sender didNotResolve:(NSDictionary *)errorDict {
+    if (sender == dacpService) {
+        NSLog(@"RAOP: DACP service %@ failed to resolve: %@", [sender name], errorDict);
     }
 }
 
