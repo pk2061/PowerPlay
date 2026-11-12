@@ -680,6 +680,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         senderTimingPort = 0;
         incomingSessionActive = NO;
         connectedDeviceName = nil;
+        hasExplicitClientName = NO;
         controlSocket = -1;
         audioSocket = -1;
         timingSocket = -1;
@@ -927,6 +928,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         audioAESIV = nil;
         [connectedDeviceName release];
         connectedDeviceName = nil;
+        hasExplicitClientName = NO;
         [hostAddress release];
         hostAddress = nil;
     }
@@ -942,6 +944,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         incomingSessionActive = YES;
         [connectedDeviceName release];
         connectedDeviceName = nil;
+        hasExplicitClientName = NO;
     }
     if (getpeername(incomingSocket, (struct sockaddr *)&peerAddress, &peerLength) == 0) {
         NSString *peerAddressString = [NSString stringWithUTF8String:inet_ntoa(peerAddress.sin_addr)];
@@ -1001,6 +1004,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             BOOL clientNameChanged = NO;
             @synchronized(self) {
                 clientNameChanged = ![reportedClientName isEqualToString:connectedDeviceName];
+                hasExplicitClientName = YES;
                 if (clientNameChanged) {
                     [connectedDeviceName release];
                     connectedDeviceName = [reportedClientName copy];
@@ -1044,6 +1048,34 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 }
             }
         } else if ([method isEqualToString:@"ANNOUNCE"]) {
+            NSArray *sdpLines = [requestParameter componentsSeparatedByString:@"\n"];
+            NSUInteger sdpLineIndex;
+            for (sdpLineIndex = 0; sdpLineIndex < [sdpLines count]; sdpLineIndex++) {
+                NSString *sdpLine = [[sdpLines objectAtIndex:sdpLineIndex]
+                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (![sdpLine hasPrefix:@"i="]) {
+                    continue;
+                }
+
+                NSString *sdpDeviceName = [[sdpLine substringFromIndex:2]
+                    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                BOOL deviceNameChanged = NO;
+                @synchronized(self) {
+                    if (!hasExplicitClientName && [sdpDeviceName length] > 0) {
+                        deviceNameChanged = ![sdpDeviceName isEqualToString:connectedDeviceName];
+                        if (deviceNameChanged) {
+                            [connectedDeviceName release];
+                            connectedDeviceName = [sdpDeviceName copy];
+                        }
+                    }
+                }
+                if (deviceNameChanged) {
+                    NSLog(@"RAOP: using SDP session name as AirPlay device name: %@", sdpDeviceName);
+                    [self notifyMetadataDidChange];
+                }
+                break;
+            }
+
             NSDictionary *audioEncryption = PowerPlayAudioEncryptionFromSDP(requestParameter);
             NSData *newAudioAESKey = [audioEncryption objectForKey:@"key"];
             NSData *newAudioAESIV = [audioEncryption objectForKey:@"iv"];

@@ -36,6 +36,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
     volatile BOOL acceptingRTSP;
     NSString *deviceName;
     NSString *connectedDeviceName;
+    BOOL hasExplicitClientName;
     NSString *currentTitle;
     NSData *coverArtData;
     BOOL isPlaying;
