@@ -649,6 +649,13 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     return 0;
 }
 
+@interface RAOPReceiver (DACPPrivate)
+- (void)startDACPServiceDiscovery;
+- (void)stopDACPServiceDiscovery;
+- (void)sendDACPCommandOnThread:(NSDictionary *)request;
+- (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData;
+@end
+
 @implementation RAOPReceiver
 
 - (void)updateDACPIdentityFromHeaders:(NSDictionary *)headers {
@@ -748,7 +755,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
     NSDictionary *request = [NSDictionary dictionaryWithObjectsAndKeys:
         command, @"command", address, @"address", activeRemote, @"activeRemote",
-        [NSNumber numberWithInteger:port], @"port", nil];
+        [NSNumber numberWithLong:(long)port], @"port", nil];
     [NSThread detachNewThreadSelector:@selector(sendDACPCommandOnThread:)
                              toTarget:self withObject:request];
     [address release];
@@ -760,7 +767,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSString *command = [request objectForKey:@"command"];
     NSString *host = [request objectForKey:@"address"];
     NSString *activeRemote = [request objectForKey:@"activeRemote"];
-    NSInteger port = [[request objectForKey:@"port"] integerValue];
+    NSInteger port = [[request objectForKey:@"port"] longValue];
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -1045,7 +1052,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         close(listenerSocket);
         listenerSocket = -1;
     }
-    if ([NSThread isMainThread]) {
+    if ([[NSThread currentThread] isEqual:[NSThread mainThread]]) {
         [self stopDACPServiceDiscovery];
     } else {
         [self performSelectorOnMainThread:@selector(stopDACPServiceDiscovery)
@@ -2780,14 +2787,26 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
     if (sender == dacpService) {
         NSString *resolvedAddress = [self addressStringFromData:addressData];
-        if (resolvedAddress != nil && [sender port] > 0) {
+        NSInteger resolvedPort = 0;
+        if ([addressData length] >= sizeof(struct sockaddr)) {
+            const struct sockaddr *socketAddress = (const struct sockaddr *)[addressData bytes];
+            if (socketAddress->sa_family == AF_INET && [addressData length] >= sizeof(struct sockaddr_in)) {
+                const struct sockaddr_in *address4 = (const struct sockaddr_in *)socketAddress;
+                resolvedPort = ntohs(address4->sin_port);
+            } else if (socketAddress->sa_family == AF_INET6 &&
+                       [addressData length] >= sizeof(struct sockaddr_in6)) {
+                const struct sockaddr_in6 *address6 = (const struct sockaddr_in6 *)socketAddress;
+                resolvedPort = ntohs(address6->sin6_port);
+            }
+        }
+        if (resolvedAddress != nil && resolvedPort > 0) {
             @synchronized(self) {
                 [dacpAddress release];
                 dacpAddress = [resolvedAddress copy];
-                dacpPort = [sender port];
+                dacpPort = resolvedPort;
             }
             NSLog(@"RAOP: resolved sender DACP service at %@:%ld",
-                  resolvedAddress, (long)[sender port]);
+                  resolvedAddress, (long)resolvedPort);
             [self notifyMetadataDidChange];
         }
         return;
