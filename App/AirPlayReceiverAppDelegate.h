@@ -17,6 +17,7 @@
     NSTextField *titleText;
     NSTextField *artistText;
     NSTextField *albumText;
+    NSTextField *elapsedTimeText;
     NSTextField *playbackTimeText;
     NSTextField *statusText;
     NSProgressIndicator *playbackProgress;

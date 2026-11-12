@@ -1,6 +1,54 @@
 #import "AirPlayReceiverAppDelegate.h"
 #import "CoverArtView.h"
 
+enum {
+    PowerPlayPreviousButton = 0,
+    PowerPlayPlayButton = 1,
+    PowerPlayPauseButton = 2,
+    PowerPlayNextButton = 3
+};
+
+static NSImage *PowerPlayTransportButtonImage(int buttonType) {
+    static NSImage *images[4] = { nil, nil, nil, nil };
+    if (images[buttonType] != nil) {
+        return images[buttonType];
+    }
+
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(20, 20)];
+    [image lockFocus];
+    [[NSColor darkGrayColor] set];
+
+    NSBezierPath *triangle = [NSBezierPath bezierPath];
+    if (buttonType == PowerPlayPlayButton) {
+        [triangle moveToPoint:NSMakePoint(6, 3)];
+        [triangle lineToPoint:NSMakePoint(6, 17)];
+        [triangle lineToPoint:NSMakePoint(17, 10)];
+        [triangle closePath];
+        [triangle fill];
+    } else if (buttonType == PowerPlayPreviousButton) {
+        NSRectFill(NSMakeRect(3, 4, 2, 12));
+        [triangle moveToPoint:NSMakePoint(15, 3)];
+        [triangle lineToPoint:NSMakePoint(15, 17)];
+        [triangle lineToPoint:NSMakePoint(6, 10)];
+        [triangle closePath];
+        [triangle fill];
+    } else if (buttonType == PowerPlayNextButton) {
+        [triangle moveToPoint:NSMakePoint(5, 3)];
+        [triangle lineToPoint:NSMakePoint(5, 17)];
+        [triangle lineToPoint:NSMakePoint(14, 10)];
+        [triangle closePath];
+        [triangle fill];
+        NSRectFill(NSMakeRect(15, 4, 2, 12));
+    } else {
+        NSRectFill(NSMakeRect(5, 4, 4, 12));
+        NSRectFill(NSMakeRect(12, 4, 4, 12));
+    }
+
+    [image unlockFocus];
+    images[buttonType] = image;
+    return image;
+}
+
 @class PowerPlayScrollingTextField;
 
 @interface PowerPlayScrollTimerTarget : NSObject {
@@ -173,6 +221,42 @@
 
 @end
 
+@interface PowerPlaySpeakerIconView : NSView
+@end
+
+@implementation PowerPlaySpeakerIconView
+
+- (void)drawRect:(NSRect)dirtyRect {
+    (void)dirtyRect;
+    NSColor *iconColor = [NSColor darkGrayColor];
+    [iconColor set];
+
+    NSBezierPath *speaker = [NSBezierPath bezierPath];
+    [speaker moveToPoint:NSMakePoint(1, 5)];
+    [speaker lineToPoint:NSMakePoint(4, 5)];
+    [speaker lineToPoint:NSMakePoint(9, 1)];
+    [speaker lineToPoint:NSMakePoint(9, 15)];
+    [speaker lineToPoint:NSMakePoint(4, 11)];
+    [speaker lineToPoint:NSMakePoint(1, 11)];
+    [speaker closePath];
+    [speaker fill];
+
+    NSBezierPath *soundWaves = [NSBezierPath bezierPath];
+    [soundWaves setLineWidth:1.4];
+    [soundWaves moveToPoint:NSMakePoint(11, 5)];
+    [soundWaves curveToPoint:NSMakePoint(11, 11)
+               controlPoint1:NSMakePoint(14, 6)
+               controlPoint2:NSMakePoint(14, 10)];
+    [soundWaves stroke];
+    [soundWaves moveToPoint:NSMakePoint(13, 2)];
+    [soundWaves curveToPoint:NSMakePoint(13, 14)
+               controlPoint1:NSMakePoint(17, 5)
+               controlPoint2:NSMakePoint(17, 11)];
+    [soundWaves stroke];
+}
+
+@end
+
 @interface PowerPlayClickableTextField : NSTextField
 @end
 
@@ -304,7 +388,16 @@
     [albumText setStringValue:@"Current Track"];
     [content addSubview:albumText];
 
-    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(220, 141, 208, 14)];
+    elapsedTimeText = [[NSTextField alloc] initWithFrame:NSMakeRect(220, 139, 42, 18)];
+    [elapsedTimeText setEditable:NO];
+    [elapsedTimeText setBordered:NO];
+    [elapsedTimeText setDrawsBackground:NO];
+    [elapsedTimeText setFont:[NSFont systemFontOfSize:10]];
+    [elapsedTimeText setTextColor:[NSColor grayColor]];
+    [elapsedTimeText setStringValue:@"0:00"];
+    [content addSubview:elapsedTimeText];
+
+    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 141, 150, 14)];
     [playbackProgress setStyle:NSProgressIndicatorBarStyle];
     [playbackProgress setIndeterminate:NO];
     [playbackProgress setMinValue:0.0];
@@ -312,7 +405,7 @@
     [playbackProgress setDoubleValue:0.0];
     [content addSubview:playbackProgress];
 
-    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(438, 139, 112, 18)];
+    playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(428, 139, 122, 18)];
     [playbackTimeText setEditable:NO];
     [playbackTimeText setBordered:NO];
     [playbackTimeText setDrawsBackground:NO];
@@ -323,7 +416,7 @@
     [[playbackTimeText cell] setScrollable:YES];
     [playbackTimeText setTarget:self];
     [playbackTimeText setAction:@selector(togglePlaybackTimeDisplay:)];
-    [playbackTimeText setStringValue:@"0:00 / 0:00"];
+    [playbackTimeText setStringValue:@"0:00"];
     [content addSubview:playbackTimeText];
 
     statusText = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 30, 520, 22)];
@@ -335,6 +428,10 @@
     [statusText setStringValue:@"Waiting for AirPlay source..."];
     [content addSubview:statusText];
 
+    PowerPlaySpeakerIconView *speakerIcon = [[PowerPlaySpeakerIconView alloc]
+        initWithFrame:NSMakeRect(198, 114, 16, 16)];
+    [content addSubview:speakerIcon];
+
     volumeSlider = [[NSSlider alloc] initWithFrame:NSMakeRect(220, 110, 180, 24)];
     [volumeSlider setMinValue:0.0];
     [volumeSlider setMaxValue:1.0];
@@ -343,23 +440,32 @@
     [volumeSlider setAction:@selector(changeVolume:)];
     [content addSubview:volumeSlider];
 
-    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(220, 70, 90, 28)];
-    [playPauseButton setTitle:@"Play"];
+    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 64, 40, 40)];
+    [prevButton setBezelStyle:NSCircularBezelStyle];
+    [prevButton setImage:PowerPlayTransportButtonImage(PowerPlayPreviousButton)];
+    [prevButton setImagePosition:NSImageOnly];
+    [prevButton setToolTip:@"Previous Track"];
+    [prevButton setTarget:self];
+    [prevButton setAction:@selector(previousTrack:)];
+    [content addSubview:prevButton];
+
+    playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(350, 64, 40, 40)];
+    [playPauseButton setBezelStyle:NSCircularBezelStyle];
+    [playPauseButton setImage:PowerPlayTransportButtonImage(PowerPlayPlayButton)];
+    [playPauseButton setImagePosition:NSImageOnly];
+    [playPauseButton setToolTip:@"Play"];
     [playPauseButton setTarget:self];
     [playPauseButton setAction:@selector(togglePlayPause:)];
     [content addSubview:playPauseButton];
 
-    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(320, 70, 90, 28)];
-    [nextButton setTitle:@"Next"];
+    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(410, 64, 40, 40)];
+    [nextButton setBezelStyle:NSCircularBezelStyle];
+    [nextButton setImage:PowerPlayTransportButtonImage(PowerPlayNextButton)];
+    [nextButton setImagePosition:NSImageOnly];
+    [nextButton setToolTip:@"Next Track"];
     [nextButton setTarget:self];
     [nextButton setAction:@selector(nextTrack:)];
     [content addSubview:nextButton];
-
-    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(420, 70, 90, 28)];
-    [prevButton setTitle:@"Prev"];
-    [prevButton setTarget:self];
-    [prevButton setAction:@selector(previousTrack:)];
-    [content addSubview:prevButton];
 
     [window makeKeyAndOrderFront:nil];
     [self refreshUI];
@@ -443,14 +549,14 @@
             connectedName = @"AirPlay device";
         }
         [statusText setStringValue:[NSString stringWithFormat:@"Playing via AirPlay from %@", connectedName]];
-        [playPauseButton setTitle:[receiver isPlaying] ? @"Pause" : @"Play"];
     } else if ([receiver isPlaying]) {
         [statusText setStringValue:@"Playing via AirPlay"];
-        [playPauseButton setTitle:@"Pause"];
     } else {
         [statusText setStringValue:[receiver isConnected] ? @"Ready" : @"Waiting for AirPlay source..."];
-        [playPauseButton setTitle:@"Play"];
     }
+    BOOL playing = [receiver isPlaying];
+    [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
+    [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];
 }
 
 - (void)refreshPlaybackProgress:(NSTimer *)timer {
@@ -467,8 +573,9 @@
     }
     NSString *durationText = [NSString stringWithFormat:@"%@%lu:%02lu", durationPrefix,
         displayedDuration / 60, displayedDuration % 60];
-    [playbackTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu / %@",
-        elapsedSeconds / 60, elapsedSeconds % 60, durationText]];
+    [elapsedTimeText setStringValue:[NSString stringWithFormat:@"%lu:%02lu",
+        elapsedSeconds / 60, elapsedSeconds % 60]];
+    [playbackTimeText setStringValue:durationText];
     BOOL playing = [receiver isPlaying];
     if (duration > 0.0) {
         if ([playbackProgress isIndeterminate]) {
