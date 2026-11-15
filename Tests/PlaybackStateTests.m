@@ -6,6 +6,10 @@
 #import <unistd.h>
 #import "AirPlayReceiverAppDelegate.h"
 
+@interface RAOPReceiver (PlaybackTestPrivate)
+- (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
+@end
+
 @interface TestPlaybackReceiver : RAOPReceiver {
     NSString *lastCommand;
     NSUInteger commandCount;
@@ -41,12 +45,21 @@
 }
 @end
 
-@interface DACPTestReceiver : RAOPReceiver
+@interface DACPTestReceiver : RAOPReceiver {
+    NSConditionLock *completedCommands;
+}
 - (void)configureAddress:(NSData *)address;
 - (void)simulateAudioPacket;
+- (void)setTestElapsed:(double)elapsed;
+- (BOOL)waitForCompletedCommands:(NSInteger)count;
 @end
 
 @implementation DACPTestReceiver
+- (id)init {
+    self = [super init];
+    if (self != nil) completedCommands = [[NSConditionLock alloc] initWithCondition:0];
+    return self;
+}
 - (void)configureAddress:(NSData *)address {
     const struct sockaddr_in *socketAddress = (const struct sockaddr_in *)[address bytes];
     @synchronized(self) {
@@ -66,6 +79,27 @@
         lastAudioPacketTime = [[NSDate date] timeIntervalSince1970];
     }
 }
+- (void)setTestElapsed:(double)elapsed {
+    @synchronized(self) {
+        elapsedPlaybackTime = elapsed;
+        progressReferenceTime = [[NSDate date] timeIntervalSince1970];
+    }
+}
+- (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
+    [super finishDACPPlaybackCommand:request succeeded:succeeded];
+    [completedCommands lock];
+    NSInteger count = [completedCommands condition];
+    [completedCommands unlockWithCondition:count + 1];
+}
+- (BOOL)waitForCompletedCommands:(NSInteger)count {
+    BOOL acquired = [completedCommands lockWhenCondition:count beforeDate:[NSDate dateWithTimeIntervalSinceNow:4.0]];
+    if (acquired) [completedCommands unlock];
+    return acquired;
+}
+- (void)dealloc {
+    [completedCommands release];
+    [super dealloc];
+}
 @end
 
 @interface DACPTestServer : NSObject {
@@ -73,8 +107,10 @@
     NSData *address;
     NSConditionLock *responseGate;
     NSString *response;
+    NSString *lastRequest;
 }
 - (NSData *)address;
+- (NSString *)lastRequest;
 - (void)startWithResponse:(NSString *)status;
 - (void)allowResponse;
 @end
@@ -103,6 +139,11 @@
     return self;
 }
 - (NSData *)address { return address; }
+- (NSString *)lastRequest {
+    NSString *request;
+    @synchronized(self) { request = [lastRequest retain]; }
+    return [request autorelease];
+}
 - (void)startWithResponse:(NSString *)status {
     [response release];
     response = [status copy];
@@ -119,7 +160,18 @@
     int client = accept(listener, NULL, NULL);
     if (client >= 0) {
         char buffer[2048];
-        recv(client, buffer, sizeof(buffer), 0);
+        size_t length = 0;
+        buffer[0] = '\0';
+        while (length < sizeof(buffer) - 1 && strstr(buffer, "\r\n\r\n") == NULL) {
+            ssize_t received = recv(client, buffer + length, sizeof(buffer) - 1 - length, 0);
+            if (received <= 0) break;
+            length += (size_t)received;
+            buffer[length] = '\0';
+        }
+        @synchronized(self) {
+            [lastRequest release];
+            lastRequest = [[NSString alloc] initWithBytes:buffer length:length encoding:NSUTF8StringEncoding];
+        }
         [responseGate lockWhenCondition:1];
         [responseGate unlock];
         const char *status = [response UTF8String];
@@ -135,6 +187,7 @@
     [address release];
     [responseGate release];
     [response release];
+    [lastRequest release];
     [super dealloc];
 }
 @end
@@ -232,6 +285,7 @@ int main(void) {
     passed &= Check([receiver isPlaying] && [[button toolTip] isEqualToString:@"Pause"],
                     @"resumed audio must restore the pause button");
 
+    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:0.0];
     [delegate refreshUI];
     NSWindow *window = [delegate valueForKey:@"window"];
     passed &= Check(SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123) &&
@@ -259,14 +313,27 @@ int main(void) {
     SendWindowTrackPress(window, NSRightArrowFunctionKey, 124);
     passed &= Check([receiver commandCount] == 11 && [[receiver lastCommand] isEqualToString:@"nextitem"],
                     @"right arrow press and release should send one next command");
+    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:4.999];
+    [[delegate valueForKey:@"prevButton"] performClick:nil];
+    passed &= Check([receiver commandCount] == 12 && [[receiver lastCommand] isEqualToString:@"previtem"],
+                    @"previous before five seconds should select the previous track");
+    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.0];
+    [[delegate valueForKey:@"prevButton"] performClick:nil];
+    passed &= Check([receiver commandCount] == 13 && [[receiver lastCommand] isEqualToString:@"previtem"],
+                    @"previous at five seconds should select the previous track");
+    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.001];
+    SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
+    passed &= Check([receiver commandCount] == 14 &&
+                    [[receiver lastCommand] isEqualToString:@"setproperty?dacp.playingtime=0"],
+                    @"previous after five seconds should restart the current track");
     SendTransportKey(window, ' ', NSCommandKeyMask, 49);
-    passed &= Check([receiver commandCount] == 11, @"modified keys must not trigger transport shortcuts");
+    passed &= Check([receiver commandCount] == 14, @"modified keys must not trigger transport shortcuts");
     [receiver setTestConnected:NO];
     [delegate refreshUI];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
     SendTransportKey(window, ' ', 0, 49);
     SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
-    passed &= Check([receiver commandCount] == 11, @"disconnected transport buttons must ignore shortcuts");
+    passed &= Check([receiver commandCount] == 14, @"disconnected transport buttons must ignore shortcuts");
 
     [delegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
     [delegate release];
@@ -315,6 +382,34 @@ int main(void) {
         [dacpDelegate refreshUI];
         passed &= Check([dacpButton isEnabled] && [[dacpButton toolTip] isEqualToString:@"Pause"],
                         @"acknowledged resume must restore the pause button");
+        passed &= Check([dacpReceiver waitForCompletedCommands:3], @"toggle commands must finish");
+
+        [server startWithResponse:@"500 Internal Server Error"];
+        [dacpDelegate previousTrack:nil];
+        [server allowResponse];
+        passed &= Check([dacpReceiver waitForCompletedCommands:4] && [dacpReceiver elapsedPlaybackTimeValue] >= 10.0,
+                @"failed seek must leave elapsed time unchanged");
+        passed &= Check([[server lastRequest] hasPrefix:@"GET /ctrl-int/1/setproperty?dacp.playingtime=0 HTTP/1.1\r\n"] &&
+                [[server lastRequest] rangeOfString:@"Active-Remote: test-token\r\n"].location != NSNotFound,
+                @"restart must send the DACP seek request and Active-Remote token");
+
+        [server startWithResponse:@"204 No Content"];
+        [dacpDelegate previousTrack:nil];
+        [server allowResponse];
+        passed &= Check([dacpReceiver waitForCompletedCommands:5] && [dacpReceiver elapsedPlaybackTimeValue] < 1.0,
+                @"successful seek must reset elapsed time");
+        [dacpDelegate refreshPlaybackProgress:nil];
+        passed &= Check([[[dacpDelegate valueForKey:@"elapsedTimeText"] stringValue] isEqualToString:@"0:00"],
+                @"successful seek must reset the elapsed display");
+
+        [dacpReceiver setTestElapsed:14.0];
+        [server startWithResponse:@"204 No Content"];
+        [dacpDelegate previousTrack:nil];
+        [dacpReceiver applyParsedMetadata:[NSDictionary dictionaryWithObject:@"Another Track" forKey:@"title"]];
+        [dacpReceiver setTestElapsed:25.0];
+        [server allowResponse];
+        passed &= Check([dacpReceiver waitForCompletedCommands:6] && [dacpReceiver elapsedPlaybackTimeValue] >= 25.0,
+                @"late seek response must not reset a different track");
         [dacpDelegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
         [dacpDelegate release];
     } else {
