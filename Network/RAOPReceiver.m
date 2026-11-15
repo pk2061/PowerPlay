@@ -1254,8 +1254,11 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     rtpSessionReady = NO;
     isPlaying = NO;
 
-    NSString *lastRTSPRequest = @"<none>";
+    NSString *lastRTSPRequest = [@"<none>" copy];
+    NSAutoreleasePool *requestPool = nil;
     while (acceptingRTSP) {
+        [requestPool drain];
+        requestPool = [[NSAutoreleasePool alloc] init];
         NSDictionary *request = PowerPlayReadRTSPRequest(incomingSocket);
         if (request == nil) {
             NSLog(@"RAOP: ending RTSP connection loop after %@ (setup=%d playing=%d)",
@@ -1299,7 +1302,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         if (cseq == nil) {
             cseq = @"1";
         }
-        lastRTSPRequest = [NSString stringWithFormat:@"%@ CSeq %@", method, cseq];
+        [lastRTSPRequest release];
+        lastRTSPRequest = [[NSString alloc] initWithFormat:@"%@ CSeq %@", method, cseq];
         NSString *sessionHeader = [headers objectForKey:@"session"];
         NSString *transport = [headers objectForKey:@"transport"];
         NSString *requestContentType = [headers objectForKey:@"content-type"];
@@ -1616,6 +1620,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
     }
 
+    [requestPool drain];
+    [lastRTSPRequest release];
     [self resetSessionAfterDisconnect];
 }
 
@@ -1933,6 +1939,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 
 - (void)receiveAudioPackets {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    NSAutoreleasePool *packetPool = nil;
     unsigned long packetCount = 0;
     unsigned long invalidPacketCount = 0;
     unsigned long decryptFailureCount = 0;
@@ -1943,6 +1950,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSLog(@"RAOP: audio RTP receiver started");
 
     while (acceptingRTSP) {
+        [packetPool drain];
+        packetPool = [[NSAutoreleasePool alloc] init];
         int socketHandle = audioSocket;
         if (socketHandle < 0 || !isSetupComplete) {
             usleep(100000);
@@ -2078,16 +2087,20 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
     }
 
+    [packetPool drain];
     NSLog(@"RAOP: audio RTP receiver stopped after %lu datagrams", packetCount);
     [threadPool drain];
 }
 
 - (void)receiveControlPackets {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    NSAutoreleasePool *packetPool = nil;
     unsigned long packetCount = 0;
     NSLog(@"RAOP: RTP control receiver started");
 
     while (acceptingRTSP) {
+        [packetPool drain];
+        packetPool = [[NSAutoreleasePool alloc] init];
         int socketHandle = rtpControlSocket;
         if (socketHandle < 0 || !isSetupComplete) {
             usleep(100000);
@@ -2135,12 +2148,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
     }
 
+    [packetPool drain];
     NSLog(@"RAOP: RTP control receiver stopped after %lu packets", packetCount);
     [threadPool drain];
 }
 
 - (void)receiveTimingPackets {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
+    NSAutoreleasePool *packetPool = nil;
     unsigned long inboundRequestCount = 0;
     unsigned long outboundRequestCount = 0;
     unsigned long replyCount = 0;
@@ -2150,6 +2165,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     uint64_t nextRequestTime = 0;
 
     while (acceptingRTSP) {
+        [packetPool drain];
+        packetPool = [[NSAutoreleasePool alloc] init];
         int socketHandle = timingSocket;
         if (socketHandle < 0 || !isSetupComplete) {
             usleep(100000);
@@ -2269,6 +2286,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         }
     }
 
+    [packetPool drain];
         NSLog(@"RAOP: RTP timing worker stopped after %lu outbound requests, %lu replies, and %lu inbound requests",
                     outboundRequestCount, replyCount, inboundRequestCount);
     [threadPool drain];

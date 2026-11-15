@@ -49,6 +49,21 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     return image;
 }
 
+@interface PowerPlayTrackButton : NSButton
+@end
+
+@implementation PowerPlayTrackButton
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSUInteger modifiers = [event modifierFlags] & (NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask);
+    if ([self isEnabled] && [event type] == NSKeyDown && [event isARepeat] &&
+        modifiers == [self keyEquivalentModifierMask] &&
+        [[event charactersIgnoringModifiers] isEqualToString:[self keyEquivalent]]) {
+        return YES;
+    }
+    return [super performKeyEquivalent:event];
+}
+@end
+
 @class PowerPlayScrollingTextField;
 
 @interface PowerPlayScrollTimerTarget : NSObject {
@@ -459,7 +474,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [volumeSlider setAction:@selector(changeVolume:)];
     [content addSubview:volumeSlider];
 
-    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(287, 49, 46, 46)];
+    prevButton = [[PowerPlayTrackButton alloc] initWithFrame:NSMakeRect(287, 49, 46, 46)];
     [prevButton setBezelStyle:NSCircularBezelStyle];
     [prevButton setImage:PowerPlayTransportButtonImage(PowerPlayPreviousButton)];
     [prevButton setImagePosition:NSImageOnly];
@@ -482,7 +497,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playPauseButton setKeyEquivalentModifierMask:0];
     [content addSubview:playPauseButton];
 
-    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
+    nextButton = [[PowerPlayTrackButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
     [nextButton setBezelStyle:NSCircularBezelStyle];
     [nextButton setImage:PowerPlayTransportButtonImage(PowerPlayNextButton)];
     [nextButton setImagePosition:NSImageOnly];

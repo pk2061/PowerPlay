@@ -152,13 +152,38 @@ static BOOL WaitForDACPCommand(RAOPReceiver *receiver) {
     return ![receiver isDACPPlaybackCommandPending];
 }
 
-static BOOL SendTransportKey(NSWindow *window, unichar character, NSUInteger modifiers, unsigned short keyCode) {
+static BOOL SendTransportKeyWithRepeat(NSWindow *window, unichar character, NSUInteger modifiers,
+                                       unsigned short keyCode, BOOL repeated) {
     NSString *characters = [NSString stringWithCharacters:&character length:1];
     NSEvent *event = [NSEvent keyEventWithType:NSKeyDown location:NSZeroPoint modifierFlags:modifiers
                                     timestamp:0 windowNumber:[window windowNumber] context:nil
                                    characters:characters charactersIgnoringModifiers:characters
-                                    isARepeat:NO keyCode:keyCode];
+                                    isARepeat:repeated keyCode:keyCode];
     return [window performKeyEquivalent:event];
+}
+
+static BOOL SendTransportKey(NSWindow *window, unichar character, NSUInteger modifiers, unsigned short keyCode) {
+    return SendTransportKeyWithRepeat(window, character, modifiers, keyCode, NO);
+}
+
+static void SendWindowTrackPress(NSWindow *window, unichar character, unsigned short keyCode) {
+    NSString *characters = [NSString stringWithCharacters:&character length:1];
+    NSUInteger modifiers = NSNumericPadKeyMask | NSFunctionKeyMask;
+    NSEvent *event = [NSEvent keyEventWithType:NSKeyDown location:NSZeroPoint modifierFlags:modifiers
+                                    timestamp:0 windowNumber:[window windowNumber] context:nil
+                                   characters:characters charactersIgnoringModifiers:characters
+                                    isARepeat:NO keyCode:keyCode];
+    [window sendEvent:event];
+    event = [NSEvent keyEventWithType:NSKeyDown location:NSZeroPoint modifierFlags:modifiers
+                            timestamp:0 windowNumber:[window windowNumber] context:nil
+                           characters:characters charactersIgnoringModifiers:characters
+                            isARepeat:YES keyCode:keyCode];
+    [window sendEvent:event];
+    event = [NSEvent keyEventWithType:NSKeyUp location:NSZeroPoint modifierFlags:modifiers
+                            timestamp:0 windowNumber:[window windowNumber] context:nil
+                           characters:characters charactersIgnoringModifiers:characters
+                            isARepeat:NO keyCode:keyCode];
+    [window sendEvent:event];
 }
 
 int main(void) {
@@ -218,14 +243,30 @@ int main(void) {
     passed &= Check(SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124) &&
                     [receiver commandCount] == 5 && [[receiver lastCommand] isEqualToString:@"nextitem"],
                     @"right arrow should send next track");
+    SendTransportKeyWithRepeat(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123, YES);
+    SendTransportKeyWithRepeat(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124, YES);
+    passed &= Check([receiver commandCount] == 5, @"repeated arrow key events must not skip extra tracks");
+    SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
+    SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
+    passed &= Check([receiver commandCount] == 7, @"separate arrow presses must each skip one track");
+    [[delegate valueForKey:@"prevButton"] performClick:nil];
+    [[delegate valueForKey:@"nextButton"] performClick:nil];
+    passed &= Check([receiver commandCount] == 9, @"track button clicks must each skip one track");
+    [window makeFirstResponder:[delegate valueForKey:@"prevButton"]];
+    SendWindowTrackPress(window, NSLeftArrowFunctionKey, 123);
+    passed &= Check([receiver commandCount] == 10 && [[receiver lastCommand] isEqualToString:@"previtem"],
+                    @"left arrow press and release should send one previous command");
+    SendWindowTrackPress(window, NSRightArrowFunctionKey, 124);
+    passed &= Check([receiver commandCount] == 11 && [[receiver lastCommand] isEqualToString:@"nextitem"],
+                    @"right arrow press and release should send one next command");
     SendTransportKey(window, ' ', NSCommandKeyMask, 49);
-    passed &= Check([receiver commandCount] == 5, @"modified keys must not trigger transport shortcuts");
+    passed &= Check([receiver commandCount] == 11, @"modified keys must not trigger transport shortcuts");
     [receiver setTestConnected:NO];
     [delegate refreshUI];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
     SendTransportKey(window, ' ', 0, 49);
     SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
-    passed &= Check([receiver commandCount] == 5, @"disconnected transport buttons must ignore shortcuts");
+    passed &= Check([receiver commandCount] == 11, @"disconnected transport buttons must ignore shortcuts");
 
     [delegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
     [delegate release];
