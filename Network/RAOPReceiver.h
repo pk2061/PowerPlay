@@ -51,7 +51,6 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
     BOOL dacpLocallyPaused;
     BOOL dacpTogglePending;
     NSUInteger dacpToggleGeneration;
-    NSUInteger playbackTrackGeneration;
     BOOL incomingSessionActive;
     float volume;
     double elapsedPlaybackTime;

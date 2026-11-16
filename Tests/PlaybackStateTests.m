@@ -329,16 +329,16 @@ int main(void) {
     [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:4.999];
     [[delegate valueForKey:@"prevButton"] performClick:nil];
     passed &= Check([receiver commandCount] == 12 && [[receiver lastCommand] isEqualToString:@"previtem"],
-                    @"previous before five seconds should select the previous track");
+                    @"previous before five seconds should send previtem to the sender");
     [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.0];
     [[delegate valueForKey:@"prevButton"] performClick:nil];
     passed &= Check([receiver commandCount] == 13 && [[receiver lastCommand] isEqualToString:@"previtem"],
-                    @"previous at five seconds should select the previous track");
+                    @"previous at five seconds should send previtem to the sender");
     [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.001];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
     passed &= Check([receiver commandCount] == 14 &&
-                    [[receiver lastCommand] isEqualToString:@"setproperty?dacp.playingtime=0"],
-                    @"previous after five seconds should restart the current track");
+                    [[receiver lastCommand] isEqualToString:@"previtem"],
+                    @"previous after five seconds should let the sender handle restart");
     SendTransportKey(window, ' ', NSCommandKeyMask, 49);
     passed &= Check([receiver commandCount] == 14, @"modified keys must not trigger transport shortcuts");
     [receiver setTestConnected:NO];
@@ -403,21 +403,16 @@ int main(void) {
         [dacpDelegate previousTrack:nil];
         [server allowResponse];
         passed &= Check([dacpReceiver waitForCompletedCommands:4] && [dacpReceiver elapsedPlaybackTimeValue] >= 10.0,
-                @"failed seek must leave elapsed time unchanged");
-        passed &= Check([[server lastRequest] hasPrefix:@"POST /ctrl-int/1/setproperty?dacp.playingtime=0 HTTP/1.1\r\n"] &&
-                        [[server lastRequest] rangeOfString:@"Content-Type: application/x-www-form-urlencoded\r\n"].location != NSNotFound &&
-                [[server lastRequest] rangeOfString:@"Content-Length: 0\r\n"].location != NSNotFound &&
+            @"failed previous command must leave elapsed time unchanged");
+        passed &= Check([[server lastRequest] hasPrefix:@"GET /ctrl-int/1/previtem HTTP/1.1\r\n"] &&
                 [[server lastRequest] rangeOfString:@"Active-Remote: test-token\r\n"].location != NSNotFound,
-                @"restart must send the DACP seek request and Active-Remote token");
+            @"previous must send the sender-supported DACP command and Active-Remote token");
 
         [server startWithResponse:@"204 No Content"];
         [dacpDelegate previousTrack:nil];
         [server allowResponse];
-        passed &= Check([dacpReceiver waitForCompletedCommands:5] && [dacpReceiver elapsedPlaybackTimeValue] < 1.0,
-                @"successful seek must reset elapsed time");
-        [dacpDelegate refreshPlaybackProgress:nil];
-        passed &= Check([[[dacpDelegate valueForKey:@"elapsedTimeText"] stringValue] isEqualToString:@"0:00"],
-                @"successful seek must reset the elapsed display");
+        passed &= Check([dacpReceiver waitForCompletedCommands:5] && [dacpReceiver elapsedPlaybackTimeValue] >= 10.0,
+            @"successful previous must wait for sender progress before changing the clock");
 
         [dacpReceiver setTestElapsed:14.0];
         [server startWithResponse:@"204 No Content"];
@@ -426,7 +421,7 @@ int main(void) {
         [dacpReceiver setTestElapsed:25.0];
         [server allowResponse];
         passed &= Check([dacpReceiver waitForCompletedCommands:6] && [dacpReceiver elapsedPlaybackTimeValue] >= 25.0,
-                @"late seek response must not reset a different track");
+                @"late previous response must not reset a different track");
         [dacpDelegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
         [dacpDelegate release];
     } else {

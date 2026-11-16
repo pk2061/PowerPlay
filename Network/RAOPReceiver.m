@@ -763,11 +763,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSMutableDictionary *request = [NSMutableDictionary dictionaryWithObjectsAndKeys:
         command, @"command", address, @"address", addressData, @"addressData", activeRemote, @"activeRemote",
         [NSNumber numberWithLong:(long)port], @"port", nil];
-    if ([command isEqualToString:@"setproperty?dacp.playingtime=0"]) {
-        @synchronized(self) {
-            [request setObject:[NSNumber numberWithUnsignedLong:playbackTrackGeneration] forKey:@"seekTrackGeneration"];
-        }
-    }
     if ([command isEqualToString:@"playpause"]) {
         @synchronized(self) {
             if (dacpTogglePending) {
@@ -829,11 +824,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSString *hostHeader = remoteAddress->sa_family == AF_INET6 ?
         [NSString stringWithFormat:@"[%@]:%ld", host, (long)port] :
         [NSString stringWithFormat:@"%@:%ld", host, (long)port];
-    BOOL propertyRequest = [command hasPrefix:@"setproperty?"];
     NSString *httpRequest = [NSString stringWithFormat:
-        @"%@ /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n%@\r\n",
-        propertyRequest ? @"POST" : @"GET", command, hostHeader, activeRemote,
-        propertyRequest ? @"Content-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n" : @""];
+        @"GET /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n\r\n",
+        command, hostHeader, activeRemote];
     NSData *requestData = [httpRequest dataUsingEncoding:NSUTF8StringEncoding];
     const unsigned char *bytes = [requestData bytes];
     NSUInteger remaining = [requestData length];
@@ -882,28 +875,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
-    NSNumber *seekGeneration = [request objectForKey:@"seekTrackGeneration"];
-    if (seekGeneration != nil) {
-        BOOL changed = NO;
-        @synchronized(self) {
-            if (succeeded && incomingSessionActive &&
-                [seekGeneration unsignedLongValue] == playbackTrackGeneration &&
-                [[request objectForKey:@"activeRemote"] isEqualToString:dacpActiveRemote] &&
-                [[request objectForKey:@"addressData"] isEqualToData:dacpAddressData]) {
-                elapsedPlaybackTime = 0.0;
-                progressReferenceTime = [self isPlaying] ? PowerPlayCurrentTime() : 0.0;
-                progressResumeOffset = 0.0;
-                lastProgressStartTimestamp = 0;
-                lastProgressCurrentTimestamp = 0;
-                hasProgressTimestamp = NO;
-                resumeProgressPending = NO;
-                progressIsRelative = NO;
-                changed = YES;
-            }
-        }
-        if (changed) [self notifyMetadataDidChange];
-        return;
-    }
     NSNumber *generation = [request objectForKey:@"toggleGeneration"];
     if (generation == nil) return;
     BOOL changed = NO;
@@ -952,7 +923,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpLocallyPaused = NO;
         dacpTogglePending = NO;
         dacpToggleGeneration = 0;
-        playbackTrackGeneration = 0;
         volume = 0.5f;
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
@@ -1199,7 +1169,6 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpLocallyPaused = NO;
         dacpTogglePending = NO;
         dacpToggleGeneration++;
-        playbackTrackGeneration++;
         rtspSessionEstablished = NO;
         rtpSessionReady = NO;
         isSetupComplete = NO;
@@ -2450,14 +2419,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
              ([newAlbum isKindOfClass:[NSString class]] && [newAlbum length] > 0 &&
               [albumName length] > 0 && ![newAlbum isEqualToString:albumName]));
         if (sameTitleChangedTrack) {
-            playbackTrackGeneration++;
             [coverArtData release];
             coverArtData = nil;
             changed = YES;
         }
         if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
             ![newTitle isEqualToString:currentTitle]) {
-            playbackTrackGeneration++;
             BOOL replacingExistingTrack = [trackName length] > 0;
             [trackName release];
             trackName = [newTitle copy];
@@ -2983,11 +2950,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)previousTrack {
-    if ([self elapsedPlaybackTimeValue] > 5.0) {
-        [self sendDACPCommand:@"setproperty?dacp.playingtime=0"];
-    } else {
-        [self sendDACPCommand:@"previtem"];
-    }
+    [self sendDACPCommand:@"previtem"];
 }
 
 - (void)setVolume:(float)newVolume {
