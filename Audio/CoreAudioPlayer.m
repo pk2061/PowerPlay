@@ -28,7 +28,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
         UInt32 bytesRequested = frameCount * streamFormat.mBytesPerFrame;
         UInt32 bytesAvailable = (UInt32)[queuedAudio length];
         UInt32 prebufferFrames = (UInt32)(streamFormat.mSampleRate * 0.25);
-        NSUInteger prebufferBytes = (NSUInteger)prebufferFrames * streamFormat.mBytesPerFrame;
+        UInt32 prebufferBytes = prebufferFrames * streamFormat.mBytesPerFrame;
         if (isPlaying && bufferingAudio && bytesAvailable >= prebufferBytes) {
             bufferingAudio = NO;
         }
