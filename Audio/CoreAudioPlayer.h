@@ -8,6 +8,7 @@
     AudioUnit outputUnit;
     AudioStreamBasicDescription streamFormat;
     BOOL isPlaying;
+    BOOL bufferingAudio;
     float volume;
     NSMutableData *queuedAudio;
 }

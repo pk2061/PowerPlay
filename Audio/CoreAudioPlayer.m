@@ -27,7 +27,15 @@ static OSStatus AUOutputCallback(void *inRefCon,
     @synchronized(self) {
         UInt32 bytesRequested = frameCount * streamFormat.mBytesPerFrame;
         UInt32 bytesAvailable = (UInt32)[queuedAudio length];
-        UInt32 bytesToCopy = isPlaying ? MIN(bytesRequested, bytesAvailable) : 0;
+        UInt32 prebufferFrames = (UInt32)(streamFormat.mSampleRate * 0.25);
+        NSUInteger prebufferBytes = (NSUInteger)prebufferFrames * streamFormat.mBytesPerFrame;
+        if (isPlaying && bufferingAudio && bytesAvailable >= prebufferBytes) {
+            bufferingAudio = NO;
+        }
+        UInt32 bytesToCopy = isPlaying && !bufferingAudio ? MIN(bytesRequested, bytesAvailable) : 0;
+        if (isPlaying && !bufferingAudio && bytesAvailable < bytesRequested) {
+            bufferingAudio = YES;
+        }
         const void *queuedBytes = [queuedAudio bytes];
         const unsigned char *sourceBytes = (const unsigned char *)queuedBytes;
         BOOL bigEndian = (streamFormat.mFormatFlags & kAudioFormatFlagIsBigEndian) != 0;
@@ -87,6 +95,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
         streamFormat = *format;
         outputUnit = NULL;
         isPlaying = NO;
+        bufferingAudio = YES;
         volume = 1.0f;
         queuedAudio = [[NSMutableData alloc] init];
 
@@ -152,6 +161,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
         if (isPlaying) {
             return;
         }
+        bufferingAudio = YES;
     }
 
     OSStatus status = AudioOutputUnitStart(outputUnit);
@@ -172,6 +182,7 @@ static OSStatus AUOutputCallback(void *inRefCon,
     AudioOutputUnitStop(outputUnit);
     @synchronized(self) {
         isPlaying = NO;
+        bufferingAudio = YES;
         [queuedAudio setLength:0];
     }
 }

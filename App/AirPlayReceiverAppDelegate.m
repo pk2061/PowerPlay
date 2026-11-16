@@ -49,18 +49,49 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     return image;
 }
 
-@interface PowerPlayTrackButton : NSButton
+@interface PowerPlayTransportWindow : NSWindow {
+    NSButton *previousTrackButton;
+    NSButton *nextTrackButton;
+    BOOL previousKeyDown;
+    BOOL nextKeyDown;
+}
+- (void)setPreviousTrackButton:(NSButton *)previous nextTrackButton:(NSButton *)next;
 @end
 
-@implementation PowerPlayTrackButton
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-    NSUInteger modifiers = [event modifierFlags] & (NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask);
-    if ([self isEnabled] && [event type] == NSKeyDown && [event isARepeat] &&
-        modifiers == [self keyEquivalentModifierMask] &&
-        [[event charactersIgnoringModifiers] isEqualToString:[self keyEquivalent]]) {
-        return YES;
+@implementation PowerPlayTransportWindow
+- (void)setPreviousTrackButton:(NSButton *)previous nextTrackButton:(NSButton *)next {
+    previousTrackButton = previous;
+    nextTrackButton = next;
+}
+- (void)sendEvent:(NSEvent *)event {
+    if ([event type] == NSKeyDown || [event type] == NSKeyUp) {
+        NSString *characters = [event charactersIgnoringModifiers];
+        unichar character = [characters length] == 1 ? [characters characterAtIndex:0] : 0;
+        if (character == NSLeftArrowFunctionKey || character == NSRightArrowFunctionKey) {
+            BOOL *keyDown = character == NSLeftArrowFunctionKey ? &previousKeyDown : &nextKeyDown;
+            NSButton *button = character == NSLeftArrowFunctionKey ? previousTrackButton : nextTrackButton;
+            NSUInteger modifiers = [event modifierFlags] & (NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask | NSShiftKeyMask);
+            if ([event type] == NSKeyUp && *keyDown) {
+                *keyDown = NO;
+                return;
+            }
+            if ([event type] == NSKeyDown && modifiers == 0) {
+                if (!*keyDown && ![event isARepeat] && [button isEnabled]) {
+                    *keyDown = YES;
+                    [button performClick:self];
+                } else {
+                    *keyDown = YES;
+                }
+                return;
+            }
+        }
     }
-    return [super performKeyEquivalent:event];
+    [super sendEvent:event];
+}
+- (void)resignKeyWindow {
+    previousKeyDown = NO;
+    nextKeyDown = NO;
+    [super resignKeyWindow];
 }
 @end
 
@@ -378,7 +409,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 
 - (void)buildUI {
     NSRect frame = NSMakeRect(0, 0, 540, 300);
-    window = [[NSWindow alloc] initWithContentRect:frame
+    window = [[PowerPlayTransportWindow alloc] initWithContentRect:frame
                                          styleMask:(NSTitledWindowMask | NSClosableWindowMask | NSMiniaturizableWindowMask)
                                            backing:NSBackingStoreBuffered
                                              defer:NO];
@@ -474,16 +505,13 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [volumeSlider setAction:@selector(changeVolume:)];
     [content addSubview:volumeSlider];
 
-    prevButton = [[PowerPlayTrackButton alloc] initWithFrame:NSMakeRect(287, 49, 46, 46)];
+    prevButton = [[NSButton alloc] initWithFrame:NSMakeRect(287, 49, 46, 46)];
     [prevButton setBezelStyle:NSCircularBezelStyle];
     [prevButton setImage:PowerPlayTransportButtonImage(PowerPlayPreviousButton)];
     [prevButton setImagePosition:NSImageOnly];
     [prevButton setToolTip:@"Previous Track"];
     [prevButton setTarget:self];
     [prevButton setAction:@selector(previousTrack:)];
-    unichar previousKey = NSLeftArrowFunctionKey;
-    [prevButton setKeyEquivalent:[NSString stringWithCharacters:&previousKey length:1]];
-    [prevButton setKeyEquivalentModifierMask:0];
     [content addSubview:prevButton];
 
     playPauseButton = [[NSButton alloc] initWithFrame:NSMakeRect(347, 49, 46, 46)];
@@ -497,17 +525,15 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [playPauseButton setKeyEquivalentModifierMask:0];
     [content addSubview:playPauseButton];
 
-    nextButton = [[PowerPlayTrackButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
+    nextButton = [[NSButton alloc] initWithFrame:NSMakeRect(407, 49, 46, 46)];
     [nextButton setBezelStyle:NSCircularBezelStyle];
     [nextButton setImage:PowerPlayTransportButtonImage(PowerPlayNextButton)];
     [nextButton setImagePosition:NSImageOnly];
     [nextButton setToolTip:@"Next Track"];
     [nextButton setTarget:self];
     [nextButton setAction:@selector(nextTrack:)];
-    unichar nextKey = NSRightArrowFunctionKey;
-    [nextButton setKeyEquivalent:[NSString stringWithCharacters:&nextKey length:1]];
-    [nextButton setKeyEquivalentModifierMask:0];
     [content addSubview:nextButton];
+    [(PowerPlayTransportWindow *)window setPreviousTrackButton:prevButton nextTrackButton:nextButton];
 
     [window makeKeyAndOrderFront:nil];
     [self refreshUI];

@@ -829,9 +829,11 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSString *hostHeader = remoteAddress->sa_family == AF_INET6 ?
         [NSString stringWithFormat:@"[%@]:%ld", host, (long)port] :
         [NSString stringWithFormat:@"%@:%ld", host, (long)port];
+    BOOL propertyRequest = [command hasPrefix:@"setproperty?"];
     NSString *httpRequest = [NSString stringWithFormat:
-        @"GET /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n\r\n",
-        command, hostHeader, activeRemote];
+        @"%@ /ctrl-int/1/%@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nUser-Agent: PowerPlay/1.0\r\n%@\r\n",
+        propertyRequest ? @"POST" : @"GET", command, hostHeader, activeRemote,
+        propertyRequest ? @"Content-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n" : @""];
     NSData *requestData = [httpRequest dataUsingEncoding:NSUTF8StringEncoding];
     const unsigned char *bytes = [requestData bytes];
     NSUInteger remaining = [requestData length];

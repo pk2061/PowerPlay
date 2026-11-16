@@ -212,6 +212,17 @@ static BOOL SendTransportKeyWithRepeat(NSWindow *window, unichar character, NSUI
                                     timestamp:0 windowNumber:[window windowNumber] context:nil
                                    characters:characters charactersIgnoringModifiers:characters
                                     isARepeat:repeated keyCode:keyCode];
+    if (character == NSLeftArrowFunctionKey || character == NSRightArrowFunctionKey) {
+        [window sendEvent:event];
+        if (!repeated) {
+            event = [NSEvent keyEventWithType:NSKeyUp location:NSZeroPoint modifierFlags:modifiers
+                                    timestamp:0 windowNumber:[window windowNumber] context:nil
+                                   characters:characters charactersIgnoringModifiers:characters
+                                    isARepeat:NO keyCode:keyCode];
+            [window sendEvent:event];
+        }
+        return YES;
+    }
     return [window performKeyEquivalent:event];
 }
 
@@ -226,6 +237,7 @@ static void SendWindowTrackPress(NSWindow *window, unichar character, unsigned s
                                     timestamp:0 windowNumber:[window windowNumber] context:nil
                                    characters:characters charactersIgnoringModifiers:characters
                                     isARepeat:NO keyCode:keyCode];
+    [window sendEvent:event];
     [window sendEvent:event];
     event = [NSEvent keyEventWithType:NSKeyDown location:NSZeroPoint modifierFlags:modifiers
                             timestamp:0 windowNumber:[window windowNumber] context:nil
@@ -300,6 +312,7 @@ int main(void) {
     SendTransportKeyWithRepeat(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123, YES);
     SendTransportKeyWithRepeat(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124, YES);
     passed &= Check([receiver commandCount] == 5, @"repeated arrow key events must not skip extra tracks");
+    [window resignKeyWindow];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
     SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
     passed &= Check([receiver commandCount] == 7, @"separate arrow presses must each skip one track");
@@ -383,13 +396,17 @@ int main(void) {
         passed &= Check([dacpButton isEnabled] && [[dacpButton toolTip] isEqualToString:@"Pause"],
                         @"acknowledged resume must restore the pause button");
         passed &= Check([dacpReceiver waitForCompletedCommands:3], @"toggle commands must finish");
+        passed &= Check([[server lastRequest] hasPrefix:@"GET /ctrl-int/1/playpause HTTP/1.1\r\n"],
+                @"transport commands must continue to use GET");
 
         [server startWithResponse:@"500 Internal Server Error"];
         [dacpDelegate previousTrack:nil];
         [server allowResponse];
         passed &= Check([dacpReceiver waitForCompletedCommands:4] && [dacpReceiver elapsedPlaybackTimeValue] >= 10.0,
                 @"failed seek must leave elapsed time unchanged");
-        passed &= Check([[server lastRequest] hasPrefix:@"GET /ctrl-int/1/setproperty?dacp.playingtime=0 HTTP/1.1\r\n"] &&
+        passed &= Check([[server lastRequest] hasPrefix:@"POST /ctrl-int/1/setproperty?dacp.playingtime=0 HTTP/1.1\r\n"] &&
+                        [[server lastRequest] rangeOfString:@"Content-Type: application/x-www-form-urlencoded\r\n"].location != NSNotFound &&
+                [[server lastRequest] rangeOfString:@"Content-Length: 0\r\n"].location != NSNotFound &&
                 [[server lastRequest] rangeOfString:@"Active-Remote: test-token\r\n"].location != NSNotFound,
                 @"restart must send the DACP seek request and Active-Remote token");
 
