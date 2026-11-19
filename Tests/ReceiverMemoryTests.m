@@ -34,8 +34,11 @@
 }
 - (void)startAudioWithSocket:(int)socketHandle;
 - (void)startRTSPWithSocket:(int)socketHandle;
+- (void)startStreamingRTSPWithSocket:(int)socketHandle;
+- (void)markAudioActiveForTimeoutTest;
 - (BOOL)waitForReleasedCount:(NSInteger)count;
 - (BOOL)stopAndWait;
+- (BOOL)hasFinished;
 @end
 
 @implementation MemoryTestReceiver
@@ -72,6 +75,19 @@
     testConnection = socketHandle;
     [NSThread detachNewThreadSelector:@selector(runRTSP) toTarget:self withObject:nil];
 }
+- (void)startStreamingRTSPWithSocket:(int)socketHandle {
+    acceptingRTSP = YES;
+    testConnection = socketHandle;
+    [NSThread detachNewThreadSelector:@selector(runRTSP) toTarget:self withObject:nil];
+}
+- (void)markAudioActiveForTimeoutTest {
+    @synchronized(self) {
+        incomingSessionActive = YES;
+        isPlaying = YES;
+        isSetupComplete = YES;
+        lastAudioPacketTime = [[NSDate date] timeIntervalSince1970];
+    }
+}
 - (void)runAudio {
     [self receiveAudioPackets];
     [finished lock];
@@ -93,6 +109,11 @@
 - (BOOL)stopAndWait {
     acceptingRTSP = NO;
     BOOL acquired = [finished lockWhenCondition:1 beforeDate:[NSDate dateWithTimeIntervalSinceNow:3.0]];
+    if (acquired) [finished unlock];
+    return acquired;
+}
+- (BOOL)hasFinished {
+    BOOL acquired = [finished lockWhenCondition:1 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     if (acquired) [finished unlock];
     return acquired;
 }
@@ -184,6 +205,32 @@ int main(void) {
         passed &= Check([receiver waitForReleasedCount:5], @"subsequent request temporaries must be released");
         close(sockets[0]);
         passed &= Check([receiver stopAndWait], @"RTSP receiver thread must stop");
+        [receiver release];
+    }
+
+    int streamingSockets[2];
+    BOOL streamingReady = socketpair(AF_UNIX, SOCK_STREAM, 0, streamingSockets) == 0;
+    passed &= Check(streamingReady, @"streaming RTSP test sockets must open");
+    if (streamingReady) {
+        struct timeval shortTimeout;
+        shortTimeout.tv_sec = 0;
+        shortTimeout.tv_usec = 100000;
+        setsockopt(streamingSockets[1], SOL_SOCKET, SO_RCVTIMEO, &shortTimeout, sizeof(shortTimeout));
+        struct timeval clientTimeout;
+        clientTimeout.tv_sec = 2;
+        clientTimeout.tv_usec = 0;
+        setsockopt(streamingSockets[0], SOL_SOCKET, SO_RCVTIMEO, &clientTimeout, sizeof(clientTimeout));
+        MemoryTestReceiver *receiver = [[MemoryTestReceiver alloc] init];
+        [receiver startStreamingRTSPWithSocket:streamingSockets[1]];
+        passed &= Check(SendRTSPRequest(streamingSockets[0], @"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n\r\n"),
+                        @"active RTSP session should answer its first request");
+        [receiver markAudioActiveForTimeoutTest];
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.25]];
+        passed &= Check(![receiver hasFinished], @"active RTP should keep the RTSP session alive after a socket timeout");
+        passed &= Check(SendRTSPRequest(streamingSockets[0], @"OPTIONS * RTSP/1.0\r\nCSeq: 2\r\n\r\n"),
+                        @"active RTSP session should answer requests after a read timeout");
+        close(streamingSockets[0]);
+        passed &= Check([receiver stopAndWait], @"streaming RTSP receiver should stop after peer close");
         [receiver release];
     }
     NSLog(@"Receiver memory tests %@", passed ? @"passed" : @"failed");

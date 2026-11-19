@@ -578,6 +578,8 @@ static NSDictionary *PowerPlayReadRTSPRequest(int socketHandle) {
                 NSLog(@"RAOP: RTSP peer closed the connection");
             } else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT) {
                 NSLog(@"RAOP: RTSP request read timed out (%d)", errno);
+                return [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES]
+                                                    forKey:@"readTimedOut"];
             } else {
                 NSLog(@"RAOP: RTSP request read failed (%d)", errno);
             }
@@ -1540,6 +1542,19 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         if (request == nil) {
             NSLog(@"RAOP: ending RTSP connection loop after %@ (setup=%d playing=%d)",
                   lastRTSPRequest, isSetupComplete, isPlaying);
+            break;
+        }
+        if ([[request objectForKey:@"readTimedOut"] boolValue]) {
+            BOOL audioActive;
+            @synchronized(self) {
+                audioActive = acceptingRTSP && isSetupComplete && isPlaying &&
+                    lastAudioPacketTime > 0.0 && PowerPlayCurrentTime() - lastAudioPacketTime <= 1.5;
+            }
+            if (audioActive) {
+                NSLog(@"RAOP: keeping RTSP session open after timeout while audio RTP is active");
+                continue;
+            }
+            NSLog(@"RAOP: ending idle RTSP connection after read timeout");
             break;
         }
 
