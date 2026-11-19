@@ -6,6 +6,9 @@
 #import <unistd.h>
 #import "AirPlayReceiverAppDelegate.h"
 
+extern NSData *PowerPlayAudioPayload(NSData *packet, NSRange payloadRange, BOOL encrypted,
+                                    NSData *key, NSData *iv);
+
 @interface RAOPReceiver (PlaybackTestPrivate)
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
 @end
@@ -369,6 +372,15 @@ int main(void) {
     NSTextField *status = [delegate valueForKey:@"statusText"];
     BOOL passed = YES;
     double now = [[NSDate date] timeIntervalSince1970];
+
+    unsigned char clearPacketBytes[20];
+    memset(clearPacketBytes, 0x5a, sizeof(clearPacketBytes));
+    NSData *clearPacket = [NSData dataWithBytes:clearPacketBytes length:sizeof(clearPacketBytes)];
+    NSData *clearPayload = PowerPlayAudioPayload(clearPacket, NSMakeRange(12, 8), NO, nil, nil);
+    passed &= Check([clearPayload isEqualToData:[clearPacket subdataWithRange:NSMakeRange(12, 8)]],
+                    @"RTP audio without SDP encryption keys should pass through as clear payload");
+    passed &= Check(PowerPlayAudioPayload(clearPacket, NSMakeRange(12, 8), YES, nil, nil) == nil,
+                    @"encrypted RTP without valid keys must not be treated as clear audio");
 
     [receiver setTestPlaying:YES packetTime:0.0 referenceTime:now - 10.0 elapsed:23.0];
     [delegate refreshPlaybackProgress:nil];

@@ -87,6 +87,7 @@ extern NSString * const PowerPlayPlaybackProgressDidChangeNotification;
     NSMutableDictionary *metadata;
     NSData *audioAESKey;
     NSData *audioAESIV;
+    BOOL audioPayloadEncrypted;
     ALACDecoder *alacDecoder;
     AirPlayMetadataParser *metadataParser;
     CoreAudioPlayer *audioPlayer;
