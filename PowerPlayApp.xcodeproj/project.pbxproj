@@ -7,12 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3D44765230AF3B0E005DC3C4 /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = 3D44765130AF3B0E005DC3C4 /* Credits.rtf */; };
 		3DE2231C307D557F003F84A6 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE2231B307D557F003F84A6 /* Cocoa.framework */; };
 		3DE22320307D5596003F84A6 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE2231F307D5596003F84A6 /* CoreAudio.framework */; };
 		3DE22324307D55AD003F84A6 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE22323307D55AD003F84A6 /* AudioToolbox.framework */; };
 		3DE22328307D55C0003F84A6 /* CoreServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE22327307D55C0003F84A6 /* CoreServices.framework */; };
 		3DE2232E307D56C7003F84A6 /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3DE2232D307D56C7003F84A6 /* AudioUnit.framework */; };
-		A1B2C3D4E5F60718293A4B64 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B65 /* libcrypto.dylib */; };
 		8D1107300486CEB800E47090 /* AirPlayReceiverAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */; };
 		8D1107310486CEB800E47090 /* GrowlNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D11070F0486CEB800E47090 /* GrowlNotifier.m */; };
 		8D1107320486CEB800E47090 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D1107100486CEB800E47090 /* main.m */; };
@@ -27,13 +27,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		3D44765130AF3B0E005DC3C4 /* Credits.rtf */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; name = Credits.rtf; path = Resources/Credits.rtf; sourceTree = "<group>"; };
+		3D44767030AF3F29005DC3C4 /* libcrypto.0.9.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o"; name = libcrypto.0.9.dylib; path = SDKs/MacOSX10.4u.sdk/usr/lib/libcrypto.0.9.dylib; sourceTree = SYSTEM_DEVELOPER_DIR; };
 		3DE22311307D54DE003F84A6 /* TEST-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "TEST-Info.plist"; sourceTree = "<group>"; };
 		3DE2231B307D557F003F84A6 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = /System/Library/Frameworks/Cocoa.framework; sourceTree = "<absolute>"; };
 		3DE2231F307D5596003F84A6 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = /System/Library/Frameworks/CoreAudio.framework; sourceTree = "<absolute>"; };
 		3DE22323307D55AD003F84A6 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = /System/Library/Frameworks/AudioToolbox.framework; sourceTree = "<absolute>"; };
 		3DE22327307D55C0003F84A6 /* CoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreServices.framework; path = /System/Library/Frameworks/CoreServices.framework; sourceTree = "<absolute>"; };
 		3DE2232D307D56C7003F84A6 /* AudioUnit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioUnit.framework; path = /System/Library/Frameworks/AudioUnit.framework; sourceTree = "<absolute>"; };
-		A1B2C3D4E5F60718293A4B65 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/lib/libcrypto.dylib; sourceTree = "<absolute>"; };
 		8D11070C0486CEB800E47090 /* AirPlayReceiverAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AirPlayReceiverAppDelegate.h; sourceTree = "<group>"; };
 		8D11070D0486CEB800E47090 /* AirPlayReceiverAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AirPlayReceiverAppDelegate.m; sourceTree = "<group>"; };
 		8D11070E0486CEB800E47090 /* GrowlNotifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowlNotifier.h; sourceTree = "<group>"; };
@@ -50,10 +51,10 @@
 		8D1107190486CEB800E47090 /* CoverArtView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CoverArtView.h; sourceTree = "<group>"; };
 		8D11071A0486CEB800E47090 /* CoverArtView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CoverArtView.m; sourceTree = "<group>"; };
 		8D11071B0486CEB800E47090 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Info.plist; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B61 /* RAOPPrivateKey.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = RAOPPrivateKey.pem; sourceTree = "<group>"; };
 		8D11071D0486CEB800E47090 /* build.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = build.sh; sourceTree = "<group>"; };
 		8D11071E0486CEB800E47090 /* PowerPlay.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = PowerPlay.icns; sourceTree = "<group>"; };
 		8D11072F0486CEB800E47090 /* PowerPlay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PowerPlay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F60718293A4B61 /* RAOPPrivateKey.pem */ = {isa = PBXFileReference; lastKnownFileType = text; path = RAOPPrivateKey.pem; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,7 +67,6 @@
 				3DE22324307D55AD003F84A6 /* AudioToolbox.framework in Frameworks */,
 				3DE22328307D55C0003F84A6 /* CoreServices.framework in Frameworks */,
 				3DE2232E307D56C7003F84A6 /* AudioUnit.framework in Frameworks */,
-				A1B2C3D4E5F60718293A4B64 /* libcrypto.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +76,8 @@
 		29B97314FDCFA39411CA2CEA = {
 			isa = PBXGroup;
 			children = (
+				3D44767030AF3F29005DC3C4 /* libcrypto.0.9.dylib */,
+				3D44765130AF3B0E005DC3C4 /* Credits.rtf */,
 				3DE2232D307D56C7003F84A6 /* AudioUnit.framework */,
 				3DE22327307D55C0003F84A6 /* CoreServices.framework */,
 				3DE22323307D55AD003F84A6 /* AudioToolbox.framework */,
@@ -225,6 +227,7 @@
 				8D1107410486CEB800E47090 /* Info.plist in Resources */,
 				A1B2C3D4E5F60718293A4B60 /* RAOPPrivateKey.pem in Resources */,
 				8D11073D0486CEB800E47090 /* PowerPlay.icns in Resources */,
+				3D44765230AF3B0E005DC3C4 /* Credits.rtf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,7 +272,15 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Project/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_1)",
+					"$(LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_2)",
+				);
+				LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_1 = "\"$(SRCROOT)\"";
+				LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_2 = "\"$(DEVELOPER_DIR)/SDKs/MacOSX10.4u.sdk/usr/lib\"";
 				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				OTHER_LDFLAGS = "-lcrypto";
 				PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
 				PRODUCT_NAME = PowerPlay;
 				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
@@ -297,7 +308,15 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = Project/Info.plist;
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_1)",
+					"$(LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_2)",
+				);
+				LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_1 = "\"$(SRCROOT)\"";
+				LIBRARY_SEARCH_PATHS_QUOTED_FOR_PROJECT_2 = "\"$(DEVELOPER_DIR)/SDKs/MacOSX10.4u.sdk/usr/lib\"";
 				MACOSX_DEPLOYMENT_TARGET = 10.4;
+				OTHER_LDFLAGS = "-lcrypto";
 				PRODUCT_BUNDLE_IDENTIFIER = com.pk2061.PowerPlay;
 				PRODUCT_NAME = PowerPlay;
 				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
