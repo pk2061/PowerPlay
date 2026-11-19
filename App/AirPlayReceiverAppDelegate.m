@@ -99,6 +99,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     id seekTarget;
     SEL seekAction;
     BOOL seekEnabled;
+    double clickedFraction;
 }
 - (void)setTarget:(id)target;
 - (id)target;
@@ -106,6 +107,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 - (SEL)action;
 - (void)setSeekEnabled:(BOOL)enabled;
 - (BOOL)isSeekEnabled;
+- (double)clickedFraction;
 @end
 
 @implementation PowerPlaySeekProgressIndicator
@@ -115,6 +117,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 - (SEL)action { return seekAction; }
 - (void)setSeekEnabled:(BOOL)enabled { seekEnabled = enabled; }
 - (BOOL)isSeekEnabled { return seekEnabled; }
+- (double)clickedFraction { return clickedFraction; }
 - (void)mouseDown:(NSEvent *)event {
     if (!seekEnabled || [self isIndeterminate] || NSWidth([self bounds]) <= 0.0) {
         return;
@@ -123,7 +126,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     double fraction = (point.x - NSMinX([self bounds])) / NSWidth([self bounds]);
     if (fraction < 0.0) fraction = 0.0;
     if (fraction > 1.0) fraction = 1.0;
-    [self setDoubleValue:fraction];
+    clickedFraction = fraction;
     if (seekAction != NULL) {
         [NSApp sendAction:seekAction to:seekTarget from:self];
     }
@@ -654,14 +657,15 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [prevButton setEnabled:controlsEnabled];
     [playPauseButton setEnabled:controlsEnabled && ![receiver isDACPPlaybackCommandPending]];
     [nextButton setEnabled:controlsEnabled];
-    [playbackProgress setSeekEnabled:controlsEnabled && [receiver trackDurationValue] > 0.0 &&
+    [playbackProgress setSeekEnabled:[receiver canSeekSender] && [receiver trackDurationValue] > 0.0 &&
         ![receiver isDACPSeekPending]];
+    [playbackProgress setToolTip:[receiver canSeekSender] ? @"Click to seek" : @"Seeking is not supported by this sender"];
 }
 
 - (IBAction)seekPlayback:(id)sender {
     double duration = [receiver trackDurationValue];
     if (duration <= 0.0) return;
-    double fraction = [sender doubleValue];
+    double fraction = [(PowerPlaySeekProgressIndicator *)sender clickedFraction];
     if (fraction < 0.0) fraction = 0.0;
     if (fraction > 1.0) fraction = 1.0;
     [receiver seekToPlaybackTime:fraction * duration];
@@ -686,7 +690,7 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
         elapsedSeconds / 60, elapsedSeconds % 60]];
     [playbackTimeText setStringValue:durationText];
     BOOL playing = [receiver isPlaying];
-    [playbackProgress setSeekEnabled:[receiver isConnected] && [receiver canControlSender] &&
+    [playbackProgress setSeekEnabled:[receiver canSeekSender] &&
         duration > 0.0 && ![receiver isDACPSeekPending]];
     [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
     [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];

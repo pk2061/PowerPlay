@@ -677,7 +677,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 @interface RAOPReceiver (DACPPrivate)
 - (void)startDACPServiceDiscovery;
 - (void)stopDACPServiceDiscovery;
-- (void)sendDACPCommandOnThread:(NSDictionary *)request;
+- (void)sendDACPCommandOnThread:(NSMutableDictionary *)request;
 - (NSDictionary *)performDACPRequest:(NSDictionary *)request method:(NSString *)method path:(NSString *)path contentType:(NSString *)contentType body:(NSData *)body;
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
 - (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData;
@@ -697,6 +697,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             dacpIdentifier = [newIdentifier copy];
             [dacpSessionID release];
             dacpSessionID = nil;
+            dacpSeekUnavailable = NO;
             shouldSearch = YES;
         }
         if ([newActiveRemote isKindOfClass:[NSString class]] && [newActiveRemote length] > 0 &&
@@ -959,7 +960,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         [NSNumber numberWithInt:statusCode], @"statusCode", responseBody, @"body", nil];
 }
 
-- (void)sendDACPCommandOnThread:(NSDictionary *)request {
+- (void)sendDACPCommandOnThread:(NSMutableDictionary *)request {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
     NSString *command = [request objectForKey:@"command"];
     if ([command isEqualToString:@"seek"]) {
@@ -973,6 +974,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             NSData *loginBody = [response objectForKey:@"body"];
             uint32_t parsedSessionID = loginStatus >= 200 && loginStatus < 300 ?
                 PowerPlayDMAPSessionID([loginBody bytes], [loginBody length], 0) : 0;
+            if (loginStatus == 404) {
+                [request setObject:[NSNumber numberWithBool:YES] forKey:@"seekUnavailable"];
+            }
             if (parsedSessionID != 0) {
                 [sessionID release];
                 sessionID = [[NSString alloc] initWithFormat:@"%u", parsedSessionID];
@@ -998,6 +1002,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                                     contentType:@"application/x-www-form-urlencoded" body:nil];
             uint32_t statusCode = [[response objectForKey:@"statusCode"] unsignedIntValue];
             succeeded = statusCode >= 200 && statusCode < 300;
+            if (statusCode == 400 || statusCode == 404 || statusCode == 405) {
+                [request setObject:[NSNumber numberWithBool:YES] forKey:@"seekUnavailable"];
+            }
             NSLog(@"RAOP: DACP seek response: HTTP %u", statusCode);
         }
         [sessionID release];
@@ -1104,6 +1111,9 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                   succeeded, pendingMatches, senderMatches, incomingSessionActive);
             if (pendingMatches) {
                 dacpSeekPending = NO;
+                if ([[request objectForKey:@"seekUnavailable"] boolValue] && incomingSessionActive && senderMatches) {
+                    dacpSeekUnavailable = YES;
+                }
                 if (succeeded && incomingSessionActive && senderMatches) {
                     elapsedPlaybackTime = [[request objectForKey:@"seekMilliseconds"] unsignedLongValue] / 1000.0;
                     progressReferenceTime = [self isPlaying] ? PowerPlayCurrentTime() : 0.0;
@@ -1166,6 +1176,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpTogglePending = NO;
         dacpToggleGeneration = 0;
         dacpSeekPending = NO;
+        dacpSeekUnavailable = NO;
         dacpSeekGeneration = 0;
         volume = 0.5f;
         elapsedPlaybackTime = 0.0;
@@ -1415,6 +1426,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpTogglePending = NO;
         dacpToggleGeneration++;
         dacpSeekPending = NO;
+        dacpSeekUnavailable = NO;
         dacpSeekGeneration++;
         rtspSessionEstablished = NO;
         rtpSessionReady = NO;
@@ -3322,6 +3334,18 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     BOOL available;
     @synchronized(self) {
         available = incomingSessionActive &&
+                    [dacpAddress length] > 0 &&
+                    [dacpAddressData length] >= sizeof(struct sockaddr) &&
+                    dacpPort > 0 &&
+                    [dacpActiveRemote length] > 0;
+    }
+    return available;
+}
+
+- (BOOL)canSeekSender {
+    BOOL available;
+    @synchronized(self) {
+        available = incomingSessionActive && !dacpSeekUnavailable &&
                     [dacpAddress length] > 0 &&
                     [dacpAddressData length] >= sizeof(struct sockaddr) &&
                     dacpPort > 0 &&

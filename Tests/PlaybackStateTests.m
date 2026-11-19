@@ -56,6 +56,7 @@
 - (void)configureAddress:(NSData *)address;
 - (void)simulateAudioPacket;
 - (void)setTestElapsed:(double)elapsed;
+- (void)forceLoginForNextSeek;
 - (BOOL)waitForCompletedCommands:(NSInteger)count;
 - (BOOL)hasCleanSeekAnchor;
 @end
@@ -94,6 +95,13 @@
         trackDuration = 100.0;
     }
 }
+- (void)forceLoginForNextSeek {
+    @synchronized(self) {
+        [dacpSessionID release];
+        dacpSessionID = nil;
+        dacpSeekUnavailable = NO;
+    }
+}
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
     [super finishDACPPlaybackCommand:request succeeded:succeeded];
     [completedCommands lock];
@@ -129,6 +137,7 @@
 - (NSString *)loginRequest;
 - (void)startWithResponse:(NSString *)status;
 - (void)startLoginAndSeekSequence:(NSData *)loginBody;
+- (void)startLoginFailure:(NSString *)status;
 - (void)allowResponse;
 @end
 
@@ -181,6 +190,11 @@
     [NSThread detachNewThreadSelector:@selector(serveLoginAndSeek:)
                              toTarget:self withObject:loginBody];
 }
+- (void)startLoginFailure:(NSString *)status {
+    [response release];
+    response = [status copy];
+    [NSThread detachNewThreadSelector:@selector(serveLoginFailure) toTarget:self withObject:nil];
+}
 - (NSString *)readRequestFromClient:(int)client {
     char buffer[2048];
     size_t length = 0;
@@ -222,6 +236,20 @@
         }
         [self sendStatus:@"204 No Content" body:nil toClient:seekClient];
         close(seekClient);
+    }
+    [pool drain];
+}
+- (void)serveLoginFailure {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    int client = accept(listener, NULL, NULL);
+    if (client >= 0) {
+        NSString *request = [self readRequestFromClient:client];
+        @synchronized(self) {
+            [loginRequest release];
+            loginRequest = [request copy];
+        }
+        [self sendStatus:response body:nil toClient:client];
+        close(client);
     }
     [pool drain];
 }
@@ -527,6 +555,21 @@ int main(void) {
         passed &= Check([dacpReceiver hasCleanSeekAnchor],
                 @"sender progress after seek should use the new position without adding an offset");
         passed &= Check([seekBar isSeekEnabled], @"successful seek should re-enable the progress bar");
+
+        [dacpReceiver forceLoginForNextSeek];
+        double displayedPosition = [seekBar doubleValue];
+        double elapsedBeforeUnsupportedSeek = [dacpReceiver elapsedPlaybackTimeValue];
+        [server startLoginFailure:@"404 Not Found"];
+        [seekBar mouseDown:seekClick];
+        passed &= Check(WaitForDACPSeek(dacpReceiver), @"unsupported login should finish the pending seek");
+        [dacpDelegate refreshUI];
+        passed &= Check(![seekBar isSeekEnabled], @"sender without a DAAP login route should disable seeking");
+        passed &= Check(fabs([seekBar doubleValue] - displayedPosition) < 0.001 &&
+                fabs([dacpReceiver elapsedPlaybackTimeValue] - elapsedBeforeUnsupportedSeek) < 0.1,
+                @"failed seek must not optimistically move the bar or elapsed time");
+        [seekBar mouseDown:seekClick];
+        passed &= Check(fabs([seekBar doubleValue] - displayedPosition) < 0.001,
+                @"disabled unsupported seek control must ignore later clicks");
         [dacpDelegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
         [dacpDelegate release];
     } else {
