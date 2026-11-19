@@ -769,8 +769,12 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     NSString *requestCommand = command;
     NSNumber *seekMilliseconds = nil;
     if ([command hasPrefix:@"seek:"]) {
-        seekMilliseconds = [NSNumber numberWithUnsignedLong:
-            (unsigned long)[[command substringFromIndex:5] longLongValue]];
+        uint32_t milliseconds = 0;
+        if (!PowerPlayParseUInt32([command substringFromIndex:5], &milliseconds)) {
+            NSLog(@"RAOP: rejected invalid DACP seek position");
+            return;
+        }
+        seekMilliseconds = [NSNumber numberWithUnsignedInt:milliseconds];
         requestCommand = @"seek";
     }
     NSString *address;
@@ -915,8 +919,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
                 NSRange colon = [line rangeOfString:@":"];
                 if (colon.location != NSNotFound &&
                     [[[line substringToIndex:colon.location] lowercaseString] isEqualToString:@"content-length"]) {
-                    contentLength = (NSUInteger)[[[line substringFromIndex:colon.location + 1]
-                        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] longLongValue];
+                    NSString *lengthString = [[line substringFromIndex:colon.location + 1]
+                        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    uint32_t parsedLength = 0;
+                    if (PowerPlayParseUInt32(lengthString, &parsedLength) && parsedLength <= 65536) {
+                        contentLength = (NSUInteger)parsedLength;
+                    } else {
+                        NSLog(@"RAOP: ignored invalid DACP response Content-Length");
+                    }
                     break;
                 }
             }
