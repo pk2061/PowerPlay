@@ -95,6 +95,41 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
 }
 @end
 
+@interface PowerPlaySeekProgressIndicator : NSProgressIndicator {
+    id seekTarget;
+    SEL seekAction;
+    BOOL seekEnabled;
+}
+- (void)setTarget:(id)target;
+- (id)target;
+- (void)setAction:(SEL)action;
+- (SEL)action;
+- (void)setSeekEnabled:(BOOL)enabled;
+- (BOOL)isSeekEnabled;
+@end
+
+@implementation PowerPlaySeekProgressIndicator
+- (void)setTarget:(id)target { seekTarget = target; }
+- (id)target { return seekTarget; }
+- (void)setAction:(SEL)action { seekAction = action; }
+- (SEL)action { return seekAction; }
+- (void)setSeekEnabled:(BOOL)enabled { seekEnabled = enabled; }
+- (BOOL)isSeekEnabled { return seekEnabled; }
+- (void)mouseDown:(NSEvent *)event {
+    if (!seekEnabled || [self isIndeterminate] || NSWidth([self bounds]) <= 0.0) {
+        return;
+    }
+    NSPoint point = [self convertPoint:[event locationInWindow] fromView:nil];
+    double fraction = (point.x - NSMinX([self bounds])) / NSWidth([self bounds]);
+    if (fraction < 0.0) fraction = 0.0;
+    if (fraction > 1.0) fraction = 1.0;
+    [self setDoubleValue:fraction];
+    if (seekAction != NULL) {
+        [NSApp sendAction:seekAction to:seekTarget from:self];
+    }
+}
+@end
+
 @class PowerPlayScrollingTextField;
 
 @interface PowerPlayScrollTimerTarget : NSObject {
@@ -458,12 +493,16 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [elapsedTimeText setStringValue:@"0:00"];
     [content addSubview:elapsedTimeText];
 
-    playbackProgress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(270, 131, 190, 14)];
+    playbackProgress = [[PowerPlaySeekProgressIndicator alloc] initWithFrame:NSMakeRect(270, 131, 190, 14)];
     [playbackProgress setStyle:NSProgressIndicatorBarStyle];
     [playbackProgress setIndeterminate:NO];
     [playbackProgress setMinValue:0.0];
     [playbackProgress setMaxValue:1.0];
     [playbackProgress setDoubleValue:0.0];
+    [playbackProgress setToolTip:@"Click to seek"];
+    [playbackProgress setTarget:self];
+    [playbackProgress setAction:@selector(seekPlayback:)];
+    [playbackProgress setSeekEnabled:NO];
     [content addSubview:playbackProgress];
 
     playbackTimeText = [[PowerPlayClickableTextField alloc] initWithFrame:NSMakeRect(470, 129, 70, 18)];
@@ -615,6 +654,18 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
     [prevButton setEnabled:controlsEnabled];
     [playPauseButton setEnabled:controlsEnabled && ![receiver isDACPPlaybackCommandPending]];
     [nextButton setEnabled:controlsEnabled];
+    [playbackProgress setSeekEnabled:controlsEnabled && [receiver trackDurationValue] > 0.0 &&
+        ![receiver isDACPSeekPending]];
+}
+
+- (IBAction)seekPlayback:(id)sender {
+    double duration = [receiver trackDurationValue];
+    if (duration <= 0.0) return;
+    double fraction = [sender doubleValue];
+    if (fraction < 0.0) fraction = 0.0;
+    if (fraction > 1.0) fraction = 1.0;
+    [receiver seekToPlaybackTime:fraction * duration];
+    [self refreshUI];
 }
 
 - (void)refreshPlaybackProgress:(NSTimer *)timer {
@@ -635,6 +686,8 @@ static NSImage *PowerPlayTransportButtonImage(int buttonType) {
         elapsedSeconds / 60, elapsedSeconds % 60]];
     [playbackTimeText setStringValue:durationText];
     BOOL playing = [receiver isPlaying];
+    [playbackProgress setSeekEnabled:[receiver isConnected] && [receiver canControlSender] &&
+        duration > 0.0 && ![receiver isDACPSeekPending]];
     [playPauseButton setImage:PowerPlayTransportButtonImage(playing ? PowerPlayPauseButton : PowerPlayPlayButton)];
     [playPauseButton setToolTip:playing ? @"Pause" : @"Play"];
     if ([receiver isConnected]) {

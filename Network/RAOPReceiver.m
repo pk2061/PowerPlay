@@ -72,6 +72,31 @@ static BOOL PowerPlayParseUInt32(NSString *string, uint32_t *value) {
     return YES;
 }
 
+static uint32_t PowerPlayDMAPSessionID(const unsigned char *bytes, NSUInteger length, NSUInteger depth) {
+    if (bytes == NULL || depth > 4) return 0;
+    NSUInteger offset = 0;
+    while (length - offset >= 8) {
+        unsigned long valueLength = ((unsigned long)bytes[offset + 4] << 24) |
+                                    ((unsigned long)bytes[offset + 5] << 16) |
+                                    ((unsigned long)bytes[offset + 6] << 8) |
+                                    (unsigned long)bytes[offset + 7];
+        offset += 8;
+        if (valueLength > length - offset) return 0;
+        if (memcmp(bytes + offset - 8, "mlid", 4) == 0 && valueLength == 4) {
+            return ((uint32_t)bytes[offset] << 24) |
+                   ((uint32_t)bytes[offset + 1] << 16) |
+                   ((uint32_t)bytes[offset + 2] << 8) |
+                   (uint32_t)bytes[offset + 3];
+        }
+        if (memcmp(bytes + offset - 8, "mlog", 4) == 0) {
+            uint32_t sessionID = PowerPlayDMAPSessionID(bytes + offset, (NSUInteger)valueLength, depth + 1);
+            if (sessionID != 0) return sessionID;
+        }
+        offset += (NSUInteger)valueLength;
+    }
+    return 0;
+}
+
 static double PowerPlayCurrentTime(void) {
     struct timeval now;
     if (gettimeofday(&now, NULL) != 0) {
@@ -653,6 +678,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 - (void)startDACPServiceDiscovery;
 - (void)stopDACPServiceDiscovery;
 - (void)sendDACPCommandOnThread:(NSDictionary *)request;
+- (NSDictionary *)performDACPRequest:(NSDictionary *)request method:(NSString *)method path:(NSString *)path contentType:(NSString *)contentType body:(NSData *)body;
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
 - (void)netService:(NSNetService *)sender didResolveAddress:(NSData *)addressData;
 @end
@@ -669,6 +695,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
             ![newIdentifier isEqualToString:dacpIdentifier]) {
             [dacpIdentifier release];
             dacpIdentifier = [newIdentifier copy];
+            [dacpSessionID release];
+            dacpSessionID = nil;
             shouldSearch = YES;
         }
         if ([newActiveRemote isKindOfClass:[NSString class]] && [newActiveRemote length] > 0 &&
@@ -738,14 +766,25 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)sendDACPCommand:(NSString *)command {
+    NSString *requestCommand = command;
+    NSNumber *seekMilliseconds = nil;
+    if ([command hasPrefix:@"seek:"]) {
+        seekMilliseconds = [NSNumber numberWithUnsignedLong:
+            (unsigned long)[[command substringFromIndex:5] longLongValue]];
+        requestCommand = @"seek";
+    }
     NSString *address;
     NSData *addressData;
     NSString *activeRemote;
+    NSString *identifier;
+    NSString *sessionID;
     NSInteger port;
     @synchronized(self) {
         address = [dacpAddress retain];
         addressData = [dacpAddressData retain];
         activeRemote = [dacpActiveRemote retain];
+        identifier = [dacpIdentifier retain];
+        sessionID = [dacpSessionID retain];
         port = dacpPort;
     }
     NSCharacterSet *lineBreaks = [NSCharacterSet characterSetWithCharactersInString:@"\r\n"];
@@ -757,18 +796,40 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         [address release];
         [addressData release];
         [activeRemote release];
+        [identifier release];
+        [sessionID release];
         return;
     }
 
     NSMutableDictionary *request = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-        command, @"command", address, @"address", addressData, @"addressData", activeRemote, @"activeRemote",
+        requestCommand, @"command", address, @"address", addressData, @"addressData", activeRemote, @"activeRemote",
         [NSNumber numberWithLong:(long)port], @"port", nil];
+    if (seekMilliseconds != nil) [request setObject:seekMilliseconds forKey:@"seekMilliseconds"];
+    if ([requestCommand isEqualToString:@"seek"]) {
+        @synchronized(self) {
+            if (dacpSeekPending) {
+                [address release];
+                [addressData release];
+                [activeRemote release];
+                [identifier release];
+                [sessionID release];
+                return;
+            }
+            dacpSeekPending = YES;
+            dacpSeekGeneration++;
+            [request setObject:[NSNumber numberWithUnsignedLong:dacpSeekGeneration] forKey:@"seekGeneration"];
+            [request setObject:identifier == nil ? @"" : identifier forKey:@"identifier"];
+            if (sessionID != nil) [request setObject:sessionID forKey:@"sessionID"];
+        }
+    }
     if ([command isEqualToString:@"playpause"]) {
         @synchronized(self) {
             if (dacpTogglePending) {
                 [address release];
                 [addressData release];
                 [activeRemote release];
+                [identifier release];
+                [sessionID release];
                 return;
             }
             dacpTogglePending = YES;
@@ -782,11 +843,158 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [address release];
     [addressData release];
     [activeRemote release];
+    [identifier release];
+    [sessionID release];
+}
+
+- (NSDictionary *)performDACPRequest:(NSDictionary *)request
+                              method:(NSString *)method
+                                path:(NSString *)path
+                         contentType:(NSString *)contentType
+                                body:(NSData *)body {
+    NSString *host = [request objectForKey:@"address"];
+    NSData *addressData = [request objectForKey:@"addressData"];
+    NSString *activeRemote = [request objectForKey:@"activeRemote"];
+    NSInteger port = [[request objectForKey:@"port"] longValue];
+    const struct sockaddr *remoteAddress = (const struct sockaddr *)[addressData bytes];
+    if (remoteAddress == NULL || [addressData length] < sizeof(struct sockaddr)) return nil;
+
+    int socketHandle = socket(remoteAddress->sa_family, SOCK_STREAM, 0);
+    if (socketHandle < 0) return nil;
+    int noSignal = 1;
+    setsockopt(socketHandle, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
+    struct timeval timeout;
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    setsockopt(socketHandle, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(socketHandle, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    if (connect(socketHandle, remoteAddress, (socklen_t)[addressData length]) != 0) {
+        NSLog(@"RAOP: DACP %@ connection to %@:%ld failed (%d)", path, host, (long)port, errno);
+        close(socketHandle);
+        return nil;
+    }
+
+    NSString *hostHeader = remoteAddress->sa_family == AF_INET6 ?
+        [NSString stringWithFormat:@"[%@]:%ld", host, (long)port] :
+        [NSString stringWithFormat:@"%@:%ld", host, (long)port];
+    NSString *requestPath = [path hasPrefix:@"login?"] ?
+        [NSString stringWithFormat:@"/%@", path] :
+        [NSString stringWithFormat:@"/ctrl-int/1/%@", path];
+    NSMutableString *httpRequest = [NSMutableString stringWithFormat:
+        @"%@ %@ HTTP/1.1\r\nHost: %@\r\nActive-Remote: %@\r\nConnection: close\r\nAccept: */*\r\nClient-DAAP-Version: 3.13\r\nClient-ATV-Sharing-Version: 1.2\r\nClient-iTunes-Sharing-Version: 3.15\r\nUser-Agent: Remote/1021\r\nViewer-Only-Client: 1\r\n",
+        method, requestPath, hostHeader, activeRemote];
+    if (contentType != nil) {
+        [httpRequest appendFormat:@"Content-Type: %@\r\n", contentType];
+    }
+    [httpRequest appendFormat:@"Content-Length: %lu\r\n\r\n", (unsigned long)[body length]];
+    NSMutableData *requestData = [NSMutableData dataWithData:[httpRequest dataUsingEncoding:NSUTF8StringEncoding]];
+    if ([body length] > 0) [requestData appendData:body];
+    const unsigned char *requestBytes = [requestData bytes];
+    NSUInteger remaining = [requestData length];
+    while (remaining > 0) {
+        ssize_t sent = send(socketHandle, requestBytes, remaining, 0);
+        if (sent < 0 && errno == EINTR) continue;
+        if (sent <= 0) break;
+        requestBytes += sent;
+        remaining -= (NSUInteger)sent;
+    }
+
+    NSMutableData *responseData = [NSMutableData data];
+    NSUInteger expectedLength = NSNotFound;
+    while (remaining == 0 && [responseData length] < 65536) {
+        NSUInteger headerEnd = PowerPlayRTSPHeaderEnd([responseData bytes], [responseData length]);
+        if (headerEnd != NSNotFound && expectedLength == NSNotFound) {
+            NSString *headers = [[[NSString alloc] initWithBytes:[responseData bytes]
+                                                          length:headerEnd
+                                                        encoding:NSASCIIStringEncoding] autorelease];
+            NSArray *lines = [headers componentsSeparatedByString:@"\r\n"];
+            NSUInteger lineIndex;
+            NSUInteger contentLength = 0;
+            for (lineIndex = 1; lineIndex < [lines count]; lineIndex++) {
+                NSString *line = [lines objectAtIndex:lineIndex];
+                NSRange colon = [line rangeOfString:@":"];
+                if (colon.location != NSNotFound &&
+                    [[[line substringToIndex:colon.location] lowercaseString] isEqualToString:@"content-length"]) {
+                    contentLength = (NSUInteger)[[[line substringFromIndex:colon.location + 1]
+                        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] longLongValue];
+                    break;
+                }
+            }
+            expectedLength = headerEnd + 4 + contentLength;
+        }
+        if (expectedLength != NSNotFound && [responseData length] >= expectedLength) break;
+        unsigned char responseChunk[4096];
+        ssize_t received = recv(socketHandle, responseChunk, sizeof(responseChunk), 0);
+        if (received < 0 && errno == EINTR) continue;
+        if (received <= 0) break;
+        [responseData appendBytes:responseChunk length:(NSUInteger)received];
+    }
+    close(socketHandle);
+
+    NSUInteger headerEnd = PowerPlayRTSPHeaderEnd([responseData bytes], [responseData length]);
+    if (remaining != 0 || headerEnd == NSNotFound) return nil;
+    NSString *headers = [[[NSString alloc] initWithBytes:[responseData bytes]
+                                                  length:headerEnd
+                                                encoding:NSASCIIStringEncoding] autorelease];
+    NSArray *lines = [headers componentsSeparatedByString:@"\r\n"];
+    int statusCode = 0;
+    if ([lines count] == 0 || sscanf([[lines objectAtIndex:0] UTF8String], "HTTP/%*u.%*u %d", &statusCode) != 1) {
+        return nil;
+    }
+    NSUInteger bodyOffset = headerEnd + 4;
+    NSData *responseBody = bodyOffset < [responseData length] ?
+        [responseData subdataWithRange:NSMakeRange(bodyOffset, [responseData length] - bodyOffset)] :
+        [NSData data];
+    return [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSNumber numberWithInt:statusCode], @"statusCode", responseBody, @"body", nil];
 }
 
 - (void)sendDACPCommandOnThread:(NSDictionary *)request {
     NSAutoreleasePool *threadPool = [[NSAutoreleasePool alloc] init];
     NSString *command = [request objectForKey:@"command"];
+    if ([command isEqualToString:@"seek"]) {
+        NSString *sessionID = [[request objectForKey:@"sessionID"] retain];
+        NSString *identifier = [request objectForKey:@"identifier"];
+        NSDictionary *response = nil;
+        if ([sessionID length] == 0 && [identifier length] == 16) {
+            NSString *loginPath = [NSString stringWithFormat:@"login?pairing-guid=0x%@&hasFP=1", [identifier uppercaseString]];
+            response = [self performDACPRequest:request method:@"GET" path:loginPath contentType:nil body:nil];
+            uint32_t loginStatus = [[response objectForKey:@"statusCode"] unsignedIntValue];
+            NSData *loginBody = [response objectForKey:@"body"];
+            uint32_t parsedSessionID = loginStatus >= 200 && loginStatus < 300 ?
+                PowerPlayDMAPSessionID([loginBody bytes], [loginBody length], 0) : 0;
+            if (parsedSessionID != 0) {
+                [sessionID release];
+                sessionID = [[NSString alloc] initWithFormat:@"%u", parsedSessionID];
+                @synchronized(self) {
+                    if ([identifier isEqualToString:dacpIdentifier] &&
+                        [[request objectForKey:@"activeRemote"] isEqualToString:dacpActiveRemote] &&
+                        [[request objectForKey:@"addressData"] isEqualToData:dacpAddressData]) {
+                        [dacpSessionID release];
+                        dacpSessionID = [sessionID copy];
+                    }
+                }
+            } else {
+                NSLog(@"RAOP: DACP login failed or returned no session ID (HTTP %u)", loginStatus);
+            }
+        }
+
+        BOOL succeeded = NO;
+        if ([sessionID length] > 0) {
+            NSString *seekPath = [NSString stringWithFormat:
+                @"setproperty?dacp.playingtime=%@&session-id=%@",
+                [request objectForKey:@"seekMilliseconds"], sessionID];
+            response = [self performDACPRequest:request method:@"POST" path:seekPath
+                                    contentType:@"application/x-www-form-urlencoded" body:nil];
+            uint32_t statusCode = [[response objectForKey:@"statusCode"] unsignedIntValue];
+            succeeded = statusCode >= 200 && statusCode < 300;
+            NSLog(@"RAOP: DACP seek response: HTTP %u", statusCode);
+        }
+        [sessionID release];
+        [self finishDACPPlaybackCommand:request succeeded:succeeded];
+        [threadPool drain];
+        return;
+    }
     NSString *host = [request objectForKey:@"address"];
     NSData *socketAddressData = [request objectForKey:@"addressData"];
     NSString *activeRemote = [request objectForKey:@"activeRemote"];
@@ -875,6 +1083,29 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
 }
 
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
+    NSNumber *seekGeneration = [request objectForKey:@"seekGeneration"];
+    if (seekGeneration != nil) {
+        @synchronized(self) {
+            BOOL pendingMatches = dacpSeekPending &&
+                [seekGeneration unsignedLongValue] == dacpSeekGeneration;
+            BOOL senderMatches = [[request objectForKey:@"activeRemote"] isEqualToString:dacpActiveRemote] &&
+                [[request objectForKey:@"addressData"] isEqualToData:dacpAddressData];
+            NSLog(@"RAOP: DACP seek completion succeeded=%d pending=%d sender=%d session=%d",
+                  succeeded, pendingMatches, senderMatches, incomingSessionActive);
+            if (pendingMatches) {
+                dacpSeekPending = NO;
+                if (succeeded && incomingSessionActive && senderMatches) {
+                    elapsedPlaybackTime = [[request objectForKey:@"seekMilliseconds"] unsignedLongValue] / 1000.0;
+                    progressReferenceTime = [self isPlaying] ? PowerPlayCurrentTime() : 0.0;
+                    progressResumeOffset = 0.0;
+                    resumeProgressPending = YES;
+                    progressIsRelative = NO;
+                }
+            }
+        }
+        [self notifyMetadataDidChange];
+        return;
+    }
     NSNumber *generation = [request objectForKey:@"toggleGeneration"];
     if (generation == nil) return;
     BOOL changed = NO;
@@ -910,6 +1141,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpService = nil;
         dacpIdentifier = nil;
         dacpActiveRemote = nil;
+        dacpSessionID = nil;
         dacpAddress = nil;
         dacpAddressData = nil;
         dacpSearchName = nil;
@@ -923,6 +1155,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpLocallyPaused = NO;
         dacpTogglePending = NO;
         dacpToggleGeneration = 0;
+        dacpSeekPending = NO;
+        dacpSeekGeneration = 0;
         volume = 0.5f;
         elapsedPlaybackTime = 0.0;
         trackDuration = 0.0;
@@ -999,6 +1233,7 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [deviceIdentifier release];
     [dacpIdentifier release];
     [dacpActiveRemote release];
+    [dacpSessionID release];
     [dacpAddress release];
     [dacpAddressData release];
     [dacpSearchName release];
@@ -1169,6 +1404,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpLocallyPaused = NO;
         dacpTogglePending = NO;
         dacpToggleGeneration++;
+        dacpSeekPending = NO;
+        dacpSeekGeneration++;
         rtspSessionEstablished = NO;
         rtpSessionReady = NO;
         isSetupComplete = NO;
@@ -1204,6 +1441,8 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
         dacpIdentifier = nil;
         [dacpActiveRemote release];
         dacpActiveRemote = nil;
+        [dacpSessionID release];
+        dacpSessionID = nil;
         [hostAddress release];
         hostAddress = nil;
     }
@@ -2419,12 +2658,16 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
              ([newAlbum isKindOfClass:[NSString class]] && [newAlbum length] > 0 &&
               [albumName length] > 0 && ![newAlbum isEqualToString:albumName]));
         if (sameTitleChangedTrack) {
+            dacpSeekPending = NO;
+            dacpSeekGeneration++;
             [coverArtData release];
             coverArtData = nil;
             changed = YES;
         }
         if ([newTitle isKindOfClass:[NSString class]] && [newTitle length] > 0 &&
             ![newTitle isEqualToString:currentTitle]) {
+            dacpSeekPending = NO;
+            dacpSeekGeneration++;
             BOOL replacingExistingTrack = [trackName length] > 0;
             [trackName release];
             trackName = [newTitle copy];
@@ -2953,6 +3196,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     [self sendDACPCommand:@"previtem"];
 }
 
+- (void)seekToPlaybackTime:(double)seconds {
+    double duration = [self trackDurationValue];
+    if (seconds < 0.0) seconds = 0.0;
+    if (duration > 0.0 && seconds > duration) seconds = duration;
+    unsigned long milliseconds = (unsigned long)(seconds * 1000.0 + 0.5);
+    [self sendDACPCommand:[NSString stringWithFormat:@"seek:%lu", milliseconds]];
+}
+
 - (void)setVolume:(float)newVolume {
     if (newVolume < 0.0f) {
         newVolume = 0.0f;
@@ -3082,6 +3333,14 @@ static NSInteger PowerPlayTransportPort(NSString *transport, NSString *portName)
     BOOL pending;
     @synchronized(self) {
         pending = dacpTogglePending;
+    }
+    return pending;
+}
+
+- (BOOL)isDACPSeekPending {
+    BOOL pending;
+    @synchronized(self) {
+        pending = dacpSeekPending;
     }
     return pending;
 }

@@ -3,6 +3,7 @@
 #import "GrowlNotifier.h"
 
 @class CoverArtView;
+@class PowerPlaySeekProgressIndicator;
 
 #if defined(__OBJC__)
 @protocol NSApplicationDelegate;
@@ -20,7 +21,7 @@
     NSTextField *elapsedTimeText;
     NSTextField *playbackTimeText;
     NSTextField *statusText;
-    NSProgressIndicator *playbackProgress;
+    PowerPlaySeekProgressIndicator *playbackProgress;
     CoverArtView *coverView;
     RAOPReceiver *receiver;
     GrowlNotifier *growlNotifier;
@@ -41,5 +42,6 @@
 - (IBAction)previousTrack:(id)sender;
 - (IBAction)changeVolume:(id)sender;
 - (IBAction)togglePlaybackTimeDisplay:(id)sender;
+- (IBAction)seekPlayback:(id)sender;
 
 @end

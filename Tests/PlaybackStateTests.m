@@ -10,6 +10,11 @@
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded;
 @end
 
+@interface NSProgressIndicator (SeekTestMouseEvent)
+- (void)mouseDown:(NSEvent *)event;
+- (BOOL)isSeekEnabled;
+@end
+
 @interface TestPlaybackReceiver : RAOPReceiver {
     NSString *lastCommand;
     NSUInteger commandCount;
@@ -52,6 +57,7 @@
 - (void)simulateAudioPacket;
 - (void)setTestElapsed:(double)elapsed;
 - (BOOL)waitForCompletedCommands:(NSInteger)count;
+- (BOOL)hasCleanSeekAnchor;
 @end
 
 @implementation DACPTestReceiver
@@ -68,8 +74,10 @@
         lastAudioPacketTime = [[NSDate date] timeIntervalSince1970];
         progressReferenceTime = lastAudioPacketTime - 5.0;
         elapsedPlaybackTime = 10.0;
+        trackDuration = 100.0;
         dacpAddress = [@"127.0.0.1" copy];
         dacpAddressData = [address copy];
+        dacpIdentifier = [@"38E1313C8B4AD7D3" copy];
         dacpPort = ntohs(socketAddress->sin_port);
         dacpActiveRemote = [@"test-token" copy];
     }
@@ -83,6 +91,7 @@
     @synchronized(self) {
         elapsedPlaybackTime = elapsed;
         progressReferenceTime = [[NSDate date] timeIntervalSince1970];
+        trackDuration = 100.0;
     }
 }
 - (void)finishDACPPlaybackCommand:(NSDictionary *)request succeeded:(BOOL)succeeded {
@@ -96,6 +105,11 @@
     if (acquired) [completedCommands unlock];
     return acquired;
 }
+- (BOOL)hasCleanSeekAnchor {
+    @synchronized(self) {
+        return resumeProgressPending && !progressIsRelative && progressResumeOffset == 0.0;
+    }
+}
 - (void)dealloc {
     [completedCommands release];
     [super dealloc];
@@ -108,10 +122,13 @@
     NSConditionLock *responseGate;
     NSString *response;
     NSString *lastRequest;
+    NSString *loginRequest;
 }
 - (NSData *)address;
 - (NSString *)lastRequest;
+- (NSString *)loginRequest;
 - (void)startWithResponse:(NSString *)status;
+- (void)startLoginAndSeekSequence:(NSData *)loginBody;
 - (void)allowResponse;
 @end
 
@@ -144,6 +161,11 @@
     @synchronized(self) { request = [lastRequest retain]; }
     return [request autorelease];
 }
+- (NSString *)loginRequest {
+    NSString *request;
+    @synchronized(self) { request = [loginRequest retain]; }
+    return [request autorelease];
+}
 - (void)startWithResponse:(NSString *)status {
     [response release];
     response = [status copy];
@@ -154,6 +176,54 @@
 - (void)allowResponse {
     [responseGate lock];
     [responseGate unlockWithCondition:1];
+}
+- (void)startLoginAndSeekSequence:(NSData *)loginBody {
+    [NSThread detachNewThreadSelector:@selector(serveLoginAndSeek:)
+                             toTarget:self withObject:loginBody];
+}
+- (NSString *)readRequestFromClient:(int)client {
+    char buffer[2048];
+    size_t length = 0;
+    buffer[0] = '\0';
+    while (length < sizeof(buffer) - 1 && strstr(buffer, "\r\n\r\n") == NULL) {
+        ssize_t received = recv(client, buffer + length, sizeof(buffer) - 1 - length, 0);
+        if (received <= 0) break;
+        length += (size_t)received;
+        buffer[length] = '\0';
+    }
+    return [[[NSString alloc] initWithBytes:buffer length:length encoding:NSUTF8StringEncoding] autorelease];
+}
+- (void)sendStatus:(NSString *)status body:(NSData *)body toClient:(int)client {
+    NSString *headers = [NSString stringWithFormat:
+        @"HTTP/1.1 %@\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n",
+        status, (unsigned long)[body length]];
+    NSData *headerData = [headers dataUsingEncoding:NSASCIIStringEncoding];
+    send(client, [headerData bytes], [headerData length], 0);
+    if ([body length] > 0) send(client, [body bytes], [body length], 0);
+}
+- (void)serveLoginAndSeek:(NSData *)loginBody {
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    int loginClient = accept(listener, NULL, NULL);
+    if (loginClient >= 0) {
+        NSString *request = [self readRequestFromClient:loginClient];
+        @synchronized(self) {
+            [loginRequest release];
+            loginRequest = [request copy];
+        }
+        [self sendStatus:@"200 OK" body:loginBody toClient:loginClient];
+        close(loginClient);
+    }
+    int seekClient = accept(listener, NULL, NULL);
+    if (seekClient >= 0) {
+        NSString *request = [self readRequestFromClient:seekClient];
+        @synchronized(self) {
+            [lastRequest release];
+            lastRequest = [request copy];
+        }
+        [self sendStatus:@"204 No Content" body:nil toClient:seekClient];
+        close(seekClient);
+    }
+    [pool drain];
 }
 - (void)serve {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -188,6 +258,7 @@
     [responseGate release];
     [response release];
     [lastRequest release];
+    [loginRequest release];
     [super dealloc];
 }
 @end
@@ -203,6 +274,14 @@ static BOOL WaitForDACPCommand(RAOPReceiver *receiver) {
         [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     return ![receiver isDACPPlaybackCommandPending];
+}
+
+static BOOL WaitForDACPSeek(RAOPReceiver *receiver) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:4.0];
+    while ([receiver isDACPSeekPending] && [deadline timeIntervalSinceNow] > 0.0) {
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    return ![receiver isDACPSeekPending];
 }
 
 static BOOL SendTransportKeyWithRepeat(NSWindow *window, unichar character, NSUInteger modifiers,
@@ -329,24 +408,20 @@ int main(void) {
     [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:4.999];
     [[delegate valueForKey:@"prevButton"] performClick:nil];
     passed &= Check([receiver commandCount] == 12 && [[receiver lastCommand] isEqualToString:@"previtem"],
-                    @"previous before five seconds should send previtem to the sender");
-    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.0];
-    [[delegate valueForKey:@"prevButton"] performClick:nil];
-    passed &= Check([receiver commandCount] == 13 && [[receiver lastCommand] isEqualToString:@"previtem"],
-                    @"previous at five seconds should send previtem to the sender");
-    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:5.001];
+                    @"previous should send previtem early in a track");
+    [receiver setTestPlaying:NO packetTime:0.0 referenceTime:0.0 elapsed:15.0];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
-    passed &= Check([receiver commandCount] == 14 &&
+    passed &= Check([receiver commandCount] == 13 &&
                     [[receiver lastCommand] isEqualToString:@"previtem"],
-                    @"previous after five seconds should let the sender handle restart");
+                    @"previous should send previtem late in a track and let the sender handle restart");
     SendTransportKey(window, ' ', NSCommandKeyMask, 49);
-    passed &= Check([receiver commandCount] == 14, @"modified keys must not trigger transport shortcuts");
+    passed &= Check([receiver commandCount] == 13, @"modified keys must not trigger transport shortcuts");
     [receiver setTestConnected:NO];
     [delegate refreshUI];
     SendTransportKey(window, NSLeftArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 123);
     SendTransportKey(window, ' ', 0, 49);
     SendTransportKey(window, NSRightArrowFunctionKey, NSNumericPadKeyMask | NSFunctionKeyMask, 124);
-    passed &= Check([receiver commandCount] == 14, @"disconnected transport buttons must ignore shortcuts");
+    passed &= Check([receiver commandCount] == 13, @"disconnected transport buttons must ignore shortcuts");
 
     [delegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
     [delegate release];
@@ -422,6 +497,36 @@ int main(void) {
         [server allowResponse];
         passed &= Check([dacpReceiver waitForCompletedCommands:6] && [dacpReceiver elapsedPlaybackTimeValue] >= 25.0,
                 @"late previous response must not reset a different track");
+
+        unsigned char loginBytes[] = {
+            'm', 'l', 'o', 'g', 0, 0, 0, 12,
+            'm', 'l', 'i', 'd', 0, 0, 0, 4, 0, 0, 0x12, 0x34
+        };
+        NSData *loginBody = [NSData dataWithBytes:loginBytes length:sizeof(loginBytes)];
+        NSProgressIndicator *seekBar = [dacpDelegate valueForKey:@"playbackProgress"];
+        NSRect seekFrame = [seekBar convertRect:[seekBar bounds] toView:nil];
+        NSPoint seekPoint = NSMakePoint(NSMinX(seekFrame) + NSWidth(seekFrame) * 0.375,
+                                        NSMidY(seekFrame));
+        NSEvent *seekClick = [NSEvent mouseEventWithType:NSLeftMouseDown location:seekPoint
+            modifierFlags:0 timestamp:0 windowNumber:[[dacpDelegate valueForKey:@"window"] windowNumber]
+            context:nil eventNumber:1 clickCount:1 pressure:1.0];
+        [dacpDelegate refreshUI];
+        passed &= Check([seekBar isSeekEnabled], @"known track duration and active sender should enable seeking");
+        [server startLoginAndSeekSequence:loginBody];
+        [seekBar mouseDown:seekClick];
+        passed &= Check([dacpReceiver isDACPSeekPending] && ![seekBar isSeekEnabled],
+                        @"progress seeking should disable while the login and seek are pending");
+        passed &= Check(WaitForDACPSeek(dacpReceiver), @"login and seek requests should complete");
+        passed &= Check([[server loginRequest] hasPrefix:@"GET /login?pairing-guid=0x38E1313C8B4AD7D3&hasFP=1 HTTP/1.1\r\n"],
+                        @"seek should authenticate with the sender DACP ID");
+        passed &= Check([[server lastRequest] hasPrefix:@"POST /ctrl-int/1/setproperty?dacp.playingtime=37500&session-id=4660 HTTP/1.1\r\n"],
+                        @"clicking 37.5 percent of a 100-second track should seek to 37.5 seconds");
+        [dacpDelegate refreshUI];
+        passed &= Check(fabs([dacpReceiver elapsedPlaybackTimeValue] - 37.5) < 0.1,
+                @"successful seek should update elapsed time to the clicked position");
+        passed &= Check([dacpReceiver hasCleanSeekAnchor],
+                @"sender progress after seek should use the new position without adding an offset");
+        passed &= Check([seekBar isSeekEnabled], @"successful seek should re-enable the progress bar");
         [dacpDelegate applicationWillTerminate:[NSNotification notificationWithName:@"TestTermination" object:nil]];
         [dacpDelegate release];
     } else {
